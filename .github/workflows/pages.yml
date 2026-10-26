@@ -1,0 +1,50 @@
+# Run every notebook, export it as a static HTML page with an index, and publish the result on GitHub Pages.
+# Requires Settings → Pages → Source: "GitHub Actions".
+name: Publish notebooks
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@v2
+      - name: Cache downloaded texts
+        uses: actions/cache@v4
+        with:
+          path: notebooks/data
+          key: notebook-data-${{ hashFiles('notebooks/*.jl') }}
+          restore-keys: notebook-data-
+      - name: Install the export tools
+        run: julia --project=scripts -e 'using Pkg; Pkg.instantiate()'
+      - name: Run and export every notebook
+        run: julia --project=scripts scripts/export.jl
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
