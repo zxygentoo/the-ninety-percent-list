@@ -1,5 +1,9 @@
 # AGENTS.md
 
+## Rules
+
+- **NEVER commit unless explicitly told to.** Always ask for review first.
+
 ## Process
 
 One list item at a time:
