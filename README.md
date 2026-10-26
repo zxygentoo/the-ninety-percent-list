@@ -4,7 +4,7 @@
 >
 > John Carmack, in a [2023 interview with Dallas Innovates](https://dallasinnovates.com/exclusive-qa-john-carmacks-different-path-to-artificial-general-intelligence/)
 
-A rebuild of that reading list, for who wants the *why*: the theory of generalization, the lineage that explains each design, the current recipe, and the phenomena nobody can yet explain. Read it the way Carmack did: by reimplementing it.
+A rebuild of that reading list, for anyone who wants the *why*: the theory of generalization, the lineage that explains each design, the current recipe, and the phenomena nobody can yet explain. Read it the way Carmack did: by reimplementing it.
 
 Each item is worked through as a **Build**: the smallest thing to implement that forces the idea to be understood, usually with the one measurement that shows it worked. Builds are [Pluto](https://plutojl.org) notebooks in Julia, which read like essays and run like experiments, and each is linked under its item.
 
@@ -32,7 +32,7 @@ Each notebook carries its own package environment, so its first run installs wha
 
 ## The list
 
-Thirty items in five sections, plus an appendix.
+Thirty items in five sections.
 
 | | Section | Items |
 |:-:|:--|:-:|
@@ -95,7 +95,7 @@ History that carries the why. Each design here is the answer to a failure of the
 8. **[The Unreasonable Effectiveness of RNNs](https://karpathy.github.io/2015/05/21/rnn-effectiveness/) + [Understanding LSTM Networks](https://colah.github.io/posts/2015-08-Understanding-LSTMs/)** `Ilya`  
    Karpathy · 2015 · blog; Olah · 2015 · blog
 
-   Sequence modeling as the universal interface; gating as the fix for vanishing gradients. The same problem residual connections solve later. The RNN side is back (see Mamba in the appendix), so this history is live.
+   Sequence modeling as the universal interface; gating as the fix for vanishing gradients. The same problem residual connections solve later. The RNN side is back ([Mamba](https://arxiv.org/abs/2312.00752)), so this history is live.
 
 9. **[Sequence to Sequence Learning with Neural Networks](https://arxiv.org/abs/1409.3215) + [Neural Machine Translation by Jointly Learning to Align and Translate](https://arxiv.org/abs/1409.0473)** `Ilya`  
    Sutskever, Vinyals, Le · 2014 · arXiv:1409.3215; Bahdanau, Cho, Bengio · 2014 · arXiv:1409.0473
@@ -112,7 +112,7 @@ History that carries the why. Each design here is the answer to a failure of the
 
    Why depth works. Notice it is the LSTM gating fix applied to depth instead of time.
 
-12. **[Attention Is All You Need](https://arxiv.org/abs/1706.03762) + [The Annotated Transformer](https://nlp.seas.harvard.edu/annotated-transformer/)** `implement`  
+12. **[Attention Is All You Need](https://arxiv.org/abs/1706.03762) + [The Annotated Transformer](https://nlp.seas.harvard.edu/annotated-transformer/)** `Ilya` `implement`  
    Vaswani et al. · 2017 · arXiv:1706.03762; Rush et al. (Harvard NLP) · 2018, revised 2022
 
    You can already build it, so re-read it as a subtraction: what from items 8–11 was kept, what was dropped, and why.
@@ -125,7 +125,7 @@ History that carries the why. Each design here is the answer to a failure of the
 14. **[Deep Speech 2](https://arxiv.org/abs/1512.02595)** `Ilya`  
    Amodei et al. (Baidu) · 2015 · arXiv:1512.02595
 
-   The first paper that reads as a scaling recipe (data, HPC, engineering) rather than an architecture. For a systems engineer, the most relatable paper on the list.
+   The first paper that reads as a scaling recipe (data, HPC, engineering) rather than an architecture.
 
 15. **[Variational Lossy Autoencoder](https://arxiv.org/abs/1611.02731) + [Understanding Diffusion Models: A Unified Perspective](https://arxiv.org/abs/2208.11970)** `Ilya`  
    Chen et al. · 2016 · arXiv:1611.02731; Luo · 2022 · arXiv:2208.11970
@@ -173,7 +173,7 @@ History that carries the why. Each design here is the answer to a failure of the
 
 ### D · Phenomena without an explanation
 
-Where discovery lives. Each of these was found by a small team on a small model, and each is reachable at laptop scale.
+Where discovery lives. Most of these were found by a small team on a small model, and each is reachable at laptop scale.
 
 23. **[Understanding Deep Learning Requires Rethinking Generalization](https://arxiv.org/abs/1611.03530)**  
    Zhang, Bengio, Hardt, Recht, Vinyals · ICLR 2017 · arXiv:1611.03530
@@ -207,7 +207,7 @@ Where discovery lives. Each of these was found by a small team on a small model,
 
 ### E · The engineering of scale
 
-Your comparative advantage. Where the systems meet the math.
+Where the systems meet the math.
 
 29. **[GPipe](https://arxiv.org/abs/1811.06965) + [How to Scale Your Model](https://jax-ml.github.io/scaling-book/)** `Ilya`  
    Huang et al. · 2018 · arXiv:1811.06965; Google DeepMind · 2025 · online book
