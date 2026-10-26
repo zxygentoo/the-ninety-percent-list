@@ -10,11 +10,11 @@ Each item is worked through as a **Build**: the smallest thing to implement that
 
 ## Notebooks
 
-Read them online at **<https://zxygentoo.github.io/the-ninety-percent-list/>**, or run them yourself.
+Progress: **1 / 30** items built `█░░░░░░░░░░░░░░░░░░░░░░░░░░░░░`
 
-| Item | Notebook | |
+| Item | Notebook | Build |
 |--:|:--|:--|
-| 1 | [01 · An Observation on Generalization](notebooks/01.An.Observation.on.Generalization.jl) | Sutskever's compression argument for unsupervised learning, tested with an ordinary compressor and Jane Austen. [Read online](https://zxygentoo.github.io/the-ninety-percent-list/01.An.Observation.on.Generalization.html). |
+| 1 | [01 · An Observation on Generalization](https://zxygentoo.github.io/the-ninety-percent-list/01.An.Observation.on.Generalization.html) | zstd, handed a corpus *X* as its dictionary, measures the bits *X* saves on *Y*, the ending of *Pride and Prejudice*. Four kinds of *X*: random noise, other authors, Austen's other novels, the book's earlier chapters. Noise saves nothing; the saving grows with relatedness, with the amount of *X*, and with the compressor's effort. |
 
 ### Running a notebook
 
@@ -56,7 +56,7 @@ The worldview. Prediction is compression, and a network is an approximation to t
 
    Watch first. Unsupervised learning as conditional Kolmogorov complexity, in the author's own words. It tells you why section A exists.
 
-   **Build:** [01 · An Observation on Generalization](notebooks/01.An.Observation.on.Generalization.jl) ([read online](https://zxygentoo.github.io/the-ninety-percent-list/01.An.Observation.on.Generalization.html)). zstd, handed a corpus *X* as its dictionary, measures the bits *X* saves on *Y*, the ending of *Pride and Prejudice*. Four kinds of *X*: random noise, other authors, Austen's other novels, the book's earlier chapters. Noise saves nothing; the saving grows with relatedness, with the amount of *X*, and with the compressor's effort.
+   **Build:** [01 · An Observation on Generalization](https://zxygentoo.github.io/the-ninety-percent-list/01.An.Observation.on.Generalization.html)
 
 2. **[Kolmogorov Complexity and Algorithmic Randomness](https://www.lirmm.fr/~ashen/kolmbook-eng-scan.pdf)** `Ilya`  
    Shen, Uspensky, Vereshchagin · AMS 2017 · book (free PDF) · chapters 1–2 only

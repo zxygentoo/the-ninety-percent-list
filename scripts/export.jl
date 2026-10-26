@@ -79,7 +79,7 @@ function main()
         notebook_paths = paths,
         Export_output_dir = SITE,
         Export_create_index = false,
-        Export_offer_binder = false,
+        Export_baked_notebookfile = false,    # publish the .jl next to the page, so its "Edit or run" guide can link to it
         on_ready = result -> append!(failures, filter(p -> last(p) > 0, errored_cells(result.notebook_sessions))),
     )
     write(joinpath(SITE, "index.html"), index_page(paths))

@@ -7,7 +7,7 @@ One list item at a time:
 1. **Read** the item.
 2. **Design** the experiment or build.
 3. **Build, run, iterate** in a notebook.
-4. **Publish and update the docs:** run the export; in `README.md`, add the notebook to the table and a Build note under its item.
+4. **Publish and update the docs:** run the export; in `README.md`, add the notebook and its Build note to the table, link it under its item, and update the progress.
 
 ## Layout
 
