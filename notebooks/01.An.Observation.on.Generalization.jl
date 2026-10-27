@@ -18,6 +18,12 @@ md"""
 *Sutskever's compression argument, tested with an ordinary compressor and a novel.*
 
 In a 2023 talk at the Simons Institute, [*An Observation on Generalization*](https://simons.berkeley.edu/talks/ilya-sutskever-openai-2023-08-14), Ilya Sutskever asked why unsupervised learning works at all, and answered with compression. This notebook turns that answer into an experiment.
+
+**Prerequisites**
+
+- Basic probability, including conditional probability, and logarithms.
+- How a language model is trained, roughly: it predicts the next token, and gradient descent lowers its cross-entropy loss.
+- No [information theory](https://en.wikipedia.org/wiki/Information_theory): the notebook introduces what it uses.
 """
 
 # ╔═╡ c331071a-b435-4482-83f4-9f06dd3f0af3
@@ -75,7 +81,7 @@ Two ideas turn this from an analogy into an argument:
 md"""
 ## Prediction is compression
 
-Suppose a model reads a text one symbol at a time and, before each symbol, gives a probability to every possible next one. An *arithmetic coder* turns those probabilities into a file, charging each symbol for how much it surprised the model:
+Suppose a model reads a text one symbol at a time and, before each symbol, gives a probability to every possible next one. An [*arithmetic coder*](https://en.wikipedia.org/wiki/Arithmetic_coding) turns those probabilities into a file, charging each symbol for how much it surprised the model:
 
 ```math
 \text{cost of a symbol} = -\log_2 p \;\text{bits}
@@ -84,13 +90,15 @@ Suppose a model reads a text one symbol at a time and, before each symbol, gives
 - A confident, correct guess is nearly free: ``p = 0.9`` costs 0.15 bits.
 - A surprise is expensive: ``p = 0.001`` costs about 10 bits.
 
-Summed over the whole text, the file comes to this, to within two bits:
+Add up those costs and you have the size of the file:
 
 ```math
-C(x) = \sum_t -\log_2 p(x_t \mid x_{<t})
+C(x) \approx \sum_t -\log_2 p(x_t \mid x_{<t})
 ```
 
-That sum is the cross-entropy loss a language model is trained to minimise, counted in bits. Training a model to predict the next token *is* training a compressor, and its loss is the size of the file it would write.
+The match is close: an ideal arithmetic coder overshoots the sum by less than two bits for the whole file, not per symbol.
+
+That sum is the [cross-entropy](https://en.wikipedia.org/wiki/Cross-entropy) loss a language model is trained to minimise, counted in bits. Training a model to predict the next token *is* training a compressor, and its loss is the size of the file it would write.
 
 The equivalence runs the other way too. Any compressor implies predictions: a continuation that compresses to ``k`` fewer bits is, in the compressor's eyes, ``2^k`` times more likely. zstd never states a probability, but each back-reference is a bet that the text is about to repeat itself, and a small file is a run of bets that paid off.
 
@@ -109,7 +117,7 @@ Two reference points for how far prediction can go:
 md"""
 ## The best possible compressor
 
-How good can a compressor get? The *Kolmogorov complexity* ``K(x)`` of a string is the length of the shortest program that prints it.
+How good can a compressor get? The [*Kolmogorov complexity*](https://en.wikipedia.org/wiki/Kolmogorov_complexity) ``K(x)`` of a string is the length of the shortest program that prints it.
 
 - The first million digits of ``\pi`` have tiny ``K``: a few lines of code compute them.
 - A million coin flips almost always have ``K`` of about a million bits: there is no shorter description than the flips themselves.
@@ -379,8 +387,8 @@ md"""
 Now put a language model in zstd's place. Because prediction is compression:
 
 - a model that predicts the next token, driving an arithmetic coder, is a compressor;
-- its training loss is the size of its file;
-- pretraining it on ``X`` and then coding ``Y`` is this notebook's experiment, with a far better ``C``.
+- its cross-entropy loss, counted in bits, is the size of that file, so the number training drives down *is* a compressed size;
+- pretrain it on ``X``, and its loss on ``Y`` is ``C(Y \mid X)``: this notebook's experiment, with a far better ``C``.
 
 Such models compress well even far from their training data. In [*Language Modeling Is Compression*](https://arxiv.org/abs/2309.10668) (Delétang et al., 2023), Chinchilla 70B, trained mostly on text, beats compressors built for images and audio:
 
@@ -397,7 +405,7 @@ md"""
 ### Sutskever's argument
 
 1. The ideal compressor ``K`` would use every regularity that ``X`` and ``Y`` share.
-2. A large network trained by gradient descent is our best computable approximation of it: a search, over the programs its weights can express, for one that compresses ``X`` well.
+2. A large network trained by gradient descent is a practical, computable approximation of it: a search, over the programs its weights can express, for one that compresses ``X`` well.
 3. The better it compresses ``X``, the more of ``X``'s structure it has captured.
 4. Whatever part of that structure ``Y`` shares comes to ``Y`` almost for free. That is why unsupervised pretraining helps with tasks it never trained on.
 
@@ -406,7 +414,7 @@ The two knobs in this notebook have direct counterparts:
 | here | for neural networks |
 |:--|:--|
 | the size of ``X`` | the amount of pretraining data |
-| zstd's level | the quality of the compressor, which grows with the network's size and training |
+| zstd's level | the quality of the compressor, which depends on the network's architecture, its size, and how much it is trained |
 """
 
 # ╔═╡ e418da90-64d3-480e-a17a-fa0cd2a93c25
