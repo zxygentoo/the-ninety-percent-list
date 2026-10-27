@@ -51,13 +51,15 @@ md"""
 
 Sutskever's answer is to think about a compressor. Compress ``X`` and ``Y`` as one file. A good compressor learns as it reads, so by the time it reaches ``Y`` it can use everything it found in ``X``.
 
-If the two share structure, ``Y`` comes out cheaper than it would on its own:
+It works like an inside joke. Between friends who were there, one word can stand for a whole story; a stranger needs the story told in full. A compressor that has read ``X`` is one of the friends.
+
+At worst, the compressor can treat ``X`` and ``Y`` separately and join the results, so compressing them together never costs more than a constant extra:
 
 ```math
 C(X \cdot Y) \;\le\; C(X) + C(Y) + O(1)
 ```
 
-Write ``C(Y \mid X)`` for the compressed size of ``Y`` once the compressor has already seen ``X``:
+When they share structure, it costs less. Write ``C(Y \mid X)`` for the compressed size of ``Y`` once the compressor has already seen ``X``:
 
 ```math
 C(Y \mid X) \;\approx\; C(X \cdot Y) - C(X)
@@ -87,6 +89,7 @@ Suppose a model reads a text one symbol at a time and, before each symbol, gives
 \text{cost of a symbol} = -\log_2 p \;\text{bits}
 ```
 
+- An even bet is one yes-or-no answer: ``p = 1/2`` costs exactly 1 bit.
 - A confident, correct guess is nearly free: ``p = 0.9`` costs 0.15 bits.
 - A surprise is expensive: ``p = 0.001`` costs about 10 bits.
 
@@ -100,7 +103,7 @@ The match is close: an ideal arithmetic coder overshoots the sum by less than tw
 
 That sum is the [cross-entropy](https://en.wikipedia.org/wiki/Cross-entropy) loss a language model is trained to minimise, counted in bits. Training a model to predict the next token *is* training a compressor, and its loss is the size of the file it would write.
 
-The equivalence runs the other way too. Any compressor implies predictions: a continuation that compresses to ``k`` fewer bits is, in the compressor's eyes, ``2^k`` times more likely. zstd never states a probability, but each back-reference is a bet that the text is about to repeat itself, and a small file is a run of bets that paid off.
+The equivalence runs the other way too. Any compressor implies predictions. A continuation that compresses to ``k`` fewer bits is, in the compressor's eyes, ``2^k`` times more likely: 10 bits shorter, about a thousand times likelier. zstd never states a probability, but each back-reference is a bet that the text is about to repeat itself, and a small file is a run of bets that paid off.
 
 So these two statements are one and the same, which is why the talk can say *compressor* and mean *language model*:
 
@@ -128,7 +131,9 @@ How good can a compressor get? The [*Kolmogorov complexity*](https://en.wikipedi
 K(x) \;\le\; C(x) + c,
 ```
 
-where the constant ``c`` is roughly the length of ``C``'s decompressor and does not depend on ``x``. No compressor beats ``K`` by more than a constant, on any data.
+where the constant ``c`` is roughly the length of ``C``'s decompressor and does not depend on ``x``. The reason is short: one program that prints ``x`` is ``C``'s decompressor followed by ``C``'s file for ``x``.
+
+No compressor beats ``K`` by more than a constant, on any data.
 
 Its conditional form ``K(Y \mid X)`` is the shortest program that prints ``Y`` when handed ``X``. It uses every regularity that ``X`` and ``Y`` share, and their *algorithmic mutual information* is the ideal version of the saved bits measured below:
 
@@ -188,10 +193,14 @@ Back-references may point into `dictionary`, text the compressor treats as alrea
 function compress(y; dictionary = UInt8[], level = 19)
     context = LibZstd.ZSTD_createCCtx()
     file = Vector{UInt8}(undef, LibZstd.ZSTD_compressBound(length(y)))
-    n = LibZstd.ZSTD_compress_usingDict(context, file, length(file), y, length(y), dictionary, length(dictionary), level)
+    n = LibZstd.ZSTD_compress_usingDict(context,
+                                        file, length(file),
+                                        y, length(y),
+                                        dictionary, length(dictionary),
+                                        level)
     LibZstd.ZSTD_freeCCtx(context)
     LibZstd.ZSTD_isError(n) == 0 || error("zstd could not compress")
-    resize!(file, n)
+    first(file, n)
 end
 
 # ╔═╡ 41817472-c4d9-5438-9b1d-6de4361262fb
@@ -212,10 +221,21 @@ saved_pct(y, x; level = 19) = 100 * saved_bits(y, x; level) / C(y; level)
 
 # ╔═╡ 2efc182d-bac3-58f9-bb99-74a9b806b47e
 BOOKS = (
-    novel = 1342,                                 # Pride and Prejudice
-    austen = [105, 158, 161, 141, 121],           # Persuasion, Emma, Sense and Sensibility, Mansfield Park, Northanger Abbey
-    other_authors = [1400, 145, 4276, 1260, 768], # Great Expectations (Dickens), Middlemarch (Eliot), North and South (Gaskell),
-                                                  # Jane Eyre (Charlotte Brontë), Wuthering Heights (Emily Brontë)
+    novel = 1342,     # Pride and Prejudice
+    austen = [
+        105,          # Persuasion
+        158,          # Emma
+        161,          # Sense and Sensibility
+        141,          # Mansfield Park
+        121,          # Northanger Abbey
+    ],
+    other_authors = [
+        1400,         # Great Expectations (Dickens)
+        145,          # Middlemarch (Eliot)
+        4276,         # North and South (Gaskell)
+        1260,         # Jane Eyre (Charlotte Brontë)
+        768,          # Wuthering Heights (Emily Brontë)
+    ],
 )
 
 # ╔═╡ 51a4d8e4-41f0-598a-8551-3be4f8766f07
@@ -270,7 +290,7 @@ Y = last(novel, Y_BYTES);
 md"""
 ## Two extremes
 
-Before the experiment, its two ends:
+Before the experiment, a baseline and its two ends:
 
 - **``Y`` alone** costs some number of bits.
 - **``Y`` given itself** as the dictionary costs almost nothing: all the compressor has to write is "copy all of it".
@@ -322,7 +342,10 @@ If the argument is right, the saving climbs as we go down the table, and the fir
 
 # ╔═╡ d2fbbfc0-ff05-5358-b99e-ae661108602e
 "`n` bytes taken evenly from each of `books`, so that every size has the same mix."
-blend(books, n) = first(reduce(vcat, first.(books, cld(n, length(books)))), n)
+function blend(books, n)
+    share = cld(n, length(books))
+    first(reduce(vcat, first.(books, share)), n)
+end
 
 # ╔═╡ d936643b-44b6-5012-8246-bbfca7b9c11d
 "Most bytes `blend` can take from `books` before one of them runs out."
@@ -335,15 +358,31 @@ austen = book.(BOOKS.austen);
 other_authors = book.(BOOKS.other_authors);
 
 # ╔═╡ a5ccc482-782d-5ac8-91b8-5cc7e6b2446a
-LADDER = [
-    (name = "random noise",                 sample = random_bytes,                      available = typemax(Int)),
-    (name = "same language, other authors", sample = n -> blend(other_authors, n),      available = blend_limit(other_authors)),
-    (name = "same author, other books",     sample = n -> blend(austen, n),             available = blend_limit(austen)),
-    (name = "same book, earlier chapters",  sample = n -> first(earlier_chapters, n),   available = length(earlier_chapters)),
-];
+RUNGS = (
+    noise = (
+        name = "random noise",
+        sample = random_bytes,
+        available = typemax(Int),
+    ),
+    other_authors = (
+        name = "same language, other authors",
+        sample = n -> blend(other_authors, n),
+        available = blend_limit(other_authors),
+    ),
+    austen = (
+        name = "same author, other books",
+        sample = n -> blend(austen, n),
+        available = blend_limit(austen),
+    ),
+    own_book = (
+        name = "same book, earlier chapters",
+        sample = n -> first(earlier_chapters, n),
+        available = length(earlier_chapters),
+    ),
+);
 
 # ╔═╡ a3ac1236-770e-57b8-81c9-71c23f2e9a84
-ladder = map(LADDER) do rung
+ladder = map(RUNGS) do rung
     X = rung.sample(X_BYTES)
     (; rung.name, bits = saved_bits(Y, X), pct = saved_pct(Y, X))
 end
@@ -352,7 +391,7 @@ end
 X_SIZES = [1KB, 3KB, 10KB, 30KB, 100KB, 400KB, 1_000KB, 2_000KB]
 
 # ╔═╡ f7a08251-3b7b-52d7-b0dc-7ba92760df3b
-growth = map(LADDER) do rung
+growth = map(RUNGS) do rung
     sizes = filter(≤(rung.available), X_SIZES)
     (; rung.name, sizes, pcts = [saved_pct(Y, rung.sample(n)) for n in sizes])
 end
@@ -375,7 +414,7 @@ One detail keeps the comparison fair. zstd also tunes its search to the size of 
 LEVELS = 1:19
 
 # ╔═╡ 4e5674f1-b99f-54a8-a0e6-0b017e330f3a
-by_level = map(LADDER) do rung
+by_level = map(RUNGS) do rung
     X = rung.sample(X_BYTES)
     (; rung.name, pcts = [saved_pct(Y, X; level) for level in LEVELS])
 end
@@ -421,7 +460,7 @@ The two knobs in this notebook have direct counterparts:
 md"""
 ### Evidence, and a bet
 
-The talk also points to evidence beyond text. In image GPT, a transformer trained only to predict the next pixel of images learned features that a linear classifier could use to recognise objects. The better the model predicted pixels, the better those features were.
+The talk also points to evidence beyond text. In [image GPT](https://proceedings.mlr.press/v119/chen20s.html) (Chen et al., 2020), a transformer trained only to predict the next pixel of images learned features that a linear classifier could use to recognise objects. The better the model predicted pixels, the better those features were.
 
 This notebook shows the mechanism, shared structure turning into saved bits, with a compressor anyone can run. How far the argument goes is another matter. That neural networks find far deeper shared structure than zstd's repeated strings is the talk's bet, and the evidence for it is how well pretraining works in practice.
 """
@@ -437,11 +476,13 @@ Number formatting and the chart style. The colours run from light to dark blue a
 commas(n::Integer) = replace(string(n), r"(?<=\d)(?=(\d{3})+$)" => ",")
 
 # ╔═╡ 33e9cb5e-0cc5-5112-9372-c1665dbfc779
-let paragraph = first(filter(p -> length(p) > 300, split(String(copy(Y)), "\n\n")[2:end]))
+let ending = String(copy(Y)),                    # a copy: String empties the vector it is given
+    paragraphs = split(ending, "\n\n")[2:end],   # the first is cut off mid-paragraph
+    opening = first(filter(p -> length(p) > 300, paragraphs))
     Markdown.parse("""
     ``Y`` is the last $(commas(Y_BYTES)) bytes of the novel. It opens:
 
-    > $(first(paragraph, 500)) …
+    > $(first(opening, 500)) …
     """)
 end
 
@@ -454,28 +495,25 @@ let (; joint, conditional) = joint_and_conditional
 end
 
 # ╔═╡ 7c974838-9907-5f5f-ba99-e97c45447ccf
-let (noise, language, author, own_book) = ladder
-    change = -noise.bits
+let change = -ladder.noise.bits
     Markdown.parse("""
-    - **Random noise** changes the cost of ``Y`` by $(change > 0 ? "+" : "")$(commas(change)) bits, $(percent(-noise.pct)). The compressor finds nothing to use, and loses almost nothing for having looked (**prediction 1**).
-    - **Everything else helps**, in the order of what it shares with ``Y`` (**prediction 2**): novels by other authors save $(percent(language.pct)), Austen's other novels $(percent(author.pct)), the book's own earlier chapters $(percent(own_book.pct)).
+    - **Random noise** changes the cost of ``Y`` by $(change > 0 ? "+" : "")$(commas(change)) bits, $(percent(-ladder.noise.pct)). The compressor finds nothing to use, and loses almost nothing for having looked (**prediction 1**).
+    - **Everything else helps**, in the order of what it shares with ``Y`` (**prediction 2**): novels by other authors save $(percent(ladder.other_authors.pct)), Austen's other novels $(percent(ladder.austen.pct)), the book's own earlier chapters $(percent(ladder.own_book.pct)).
 
     What zstd picks up is concrete: common words and spellings, Austen's phrasing, the names Elizabeth, Darcy and Bingley. The principle is the one in the talk, though: structure in ``X`` that is also in ``Y`` turns into bits saved on ``Y``.
     """)
 end
 
 # ╔═╡ be37c1b0-71c3-5f5a-bc27-7a7f5474f03e
-let (noise, language, _, own_book) = by_level
-    Markdown.parse("""
-    The texts are the same at every level; only the compressor's effort changes (**prediction 3**):
+Markdown.parse("""
+The texts are the same at every level; only the compressor's effort changes (**prediction 3**):
 
-    - other authors' novels save $(percent(first(language.pcts))) of ``Y`` at level 1, and $(percent(last(language.pcts))) at level 19;
-    - the book's earlier chapters go from $(percent(first(own_book.pcts))) to $(percent(last(own_book.pcts)));
-    - noise stays within $(percent(maximum(abs, noise.pcts))) of zero at every level.
+- other authors' novels save $(percent(first(by_level.other_authors.pcts))) of ``Y`` at level 1, and $(percent(last(by_level.other_authors.pcts))) at level 19;
+- the book's earlier chapters go from $(percent(first(by_level.own_book.pcts))) to $(percent(last(by_level.own_book.pcts)));
+- noise stays within $(percent(maximum(abs, by_level.noise.pcts))) of zero at every level.
 
-    In the talk's terms, a better compressor has lower *regret*: less of what ``X`` could have taught it about ``Y`` goes unused. zstd's top level is still far from ``K``, which by definition leaves nothing computable unused. The talk's claim is that large neural networks get much closer.
-    """)
-end
+In the talk's terms, a better compressor has lower *regret*: less of what ``X`` could have taught it about ``Y`` goes unused. zstd's top level is still far from ``K``, which by definition leaves nothing computable unused. The talk's claim is that large neural networks get much closer.
+""")
 
 # ╔═╡ 63364e6a-ff60-5930-8690-e0de3b5f6abe
 per_byte(bits) = @sprintf("%.2f", bits / Y_BYTES)
@@ -490,11 +528,12 @@ zstd only finds repeated strings. It cannot see what a reader sees:
 - that a character is acting in character,
 - that a story is being retold in other words.
 
-That is why the savings here are modest, $(percent(ladder[end].pct)) even from the book's own earlier chapters. And it is why zstd spends $(per_byte(extremes.alone)) bits on each byte of ``Y`` where Shannon's readers needed about one per letter: most of the structure of English is invisible to it.
+That is why the savings here are modest, $(percent(ladder.own_book.pct)) even from the book's own earlier chapters. And it is why zstd spends $(per_byte(extremes.alone)) bits on each byte of ``Y`` where Shannon's readers needed about one per letter: most of the structure of English is invisible to it.
 """
 
 # ╔═╡ bacdf724-9c03-58f6-886c-5e84b98a4716
-human(bytes) = bytes >= 1_000KB ? @sprintf("%g MB", round(bytes / 1_000KB; sigdigits = 3)) : @sprintf("%g KB", round(bytes / KB; sigdigits = 3))
+human(bytes) = bytes >= 1_000KB ? @sprintf("%g MB", round(bytes / 1_000KB; sigdigits = 3)) :
+                                  @sprintf("%g KB", round(bytes / KB; sigdigits = 3))
 
 # ╔═╡ cb48734c-71a1-5db1-8d26-683ce53bb608
 md"""
@@ -532,35 +571,32 @@ The ladder gave every ``X`` the same size. Now let the size vary, from 1 KB to 2
 """
 
 # ╔═╡ 0b57676b-9b1e-5093-b9b0-678120392281
-let (_, language, author, own_book) = growth
-    more_or_less = last(author.pcts) > last(own_book.pcts) ? "more than" : "nearly as much as"
+let more_or_less = last(growth.austen.pcts) > last(growth.own_book.pcts) ? "more than" : "nearly as much as"
     Markdown.parse("""
     Every related source saves more the more of it there is, and none has stopped improving at the largest size.
 
-    Quantity can also make up for relatedness. $(human(last(author.sizes))) of Austen's other books save $(percent(last(author.pcts))), $more_or_less the $(percent(last(own_book.pcts))) saved by $(human(last(own_book.sizes))) of the novel's own earlier chapters.
+    Quantity can also make up for relatedness. $(human(last(growth.austen.sizes))) of Austen's other books save $(percent(last(growth.austen.pcts))), $more_or_less the $(percent(last(growth.own_book.pcts))) saved by $(human(last(growth.own_book.sizes))) of the novel's own earlier chapters.
 
     That is, in miniature, the bet behind pretraining on broad data: a lot of loosely related text can make up for having little of the closely related kind.
     """)
 end
 
 # ╔═╡ 665cbe8f-bb81-5774-ba45-8a6c43c3e692
-let (noise, language, author, own_book) = ladder, austen_growth = growth[3], language_levels = by_level[2]
-    Markdown.parse("""
-    ## What this shows
+Markdown.parse("""
+## What this shows
 
-    With nothing cleverer than zstd, all three predictions hold.
+With nothing cleverer than zstd, all three predictions hold.
 
-    1. **Unrelated data costs nothing.** $(human(X_BYTES)) of random noise changes the cost of ``Y`` by $(percent(abs(noise.pct))).
-    2. **Related data helps, and more of it helps more.** Novels by other authors save $(percent(language.pct)) of ``Y``, Austen's other books $(percent(author.pct)), the book's own earlier chapters $(percent(own_book.pct)). And every source saves more as it grows: $(human(last(austen_growth.sizes))) of Austen's other books save $(percent(last(austen_growth.pcts))).
-    3. **A better compressor finds more.** The same $(human(X_BYTES)) of other authors' novels saves $(percent(first(language_levels.pcts))) at zstd's fastest level and $(percent(last(language_levels.pcts))) at its most thorough.
+1. **Unrelated data costs nothing.** $(human(X_BYTES)) of random noise changes the cost of ``Y`` by $(percent(abs(ladder.noise.pct))).
+2. **Related data helps, and more of it helps more.** Novels by other authors save $(percent(ladder.other_authors.pct)) of ``Y``, Austen's other books $(percent(ladder.austen.pct)), the book's own earlier chapters $(percent(ladder.own_book.pct)). And every source saves more as it grows: $(human(last(growth.austen.sizes))) of Austen's other books save $(percent(last(growth.austen.pcts))).
+3. **A better compressor finds more.** The same $(human(X_BYTES)) of other authors' novels saves $(percent(first(by_level.other_authors.pcts))) at zstd's fastest level and $(percent(last(by_level.other_authors.pcts))) at its most thorough.
 
-    That is the talk's argument in miniature. A compressor that has read ``X`` knows something about ``Y``, in proportion to:
+That is the talk's argument in miniature. A compressor that has read ``X`` knows something about ``Y``. How much grows with:
 
-    - what the two share,
-    - how much ``X`` there is,
-    - how good the compressor is.
-    """)
-end
+- what the two share,
+- how much ``X`` there is,
+- how good the compressor is.
+""")
 
 # ╔═╡ 53fc3dfe-847e-50a9-b82f-e1117719d5dc
 VIZ = (surface = "#fcfcfb", text = "#0b0b0b", text2 = "#52514e", grid = "#e4e3de")
@@ -584,22 +620,31 @@ THEME = Theme(
 # ╔═╡ bc8f168f-38d2-500b-a7d6-f317545e94ba
 with_theme(THEME) do
     fig = Figure(size = (760, 300))
-    values = [r.pct for r in ladder]
-    ax = Axis(fig[1, 1]; yreversed = true, yticks = (eachindex(ladder), [r.name for r in ladder]), ygridvisible = false,
-              xlabel = "bits saved on Y, % of C(Y)", title = "What $(human(X_BYTES)) of X saves on Y")
-    barplot!(ax, eachindex(ladder), values; direction = :x, width = 0.6, color = RUNG_COLORS)
-    text!(ax, max.(values, 0), eachindex(ladder); text = percent.(values), align = (:left, :center), offset = (6, 0),
-          color = VIZ.text, fontsize = 12)
+    rows = 1:length(ladder)
+    pcts = [r.pct for r in ladder]
+    ax = Axis(fig[1, 1];
+              title = "What $(human(X_BYTES)) of X saves on Y",
+              xlabel = "bits saved on Y, % of C(Y)",
+              yticks = (rows, [r.name for r in ladder]),
+              yreversed = true,
+              ygridvisible = false)
+    barplot!(ax, rows, pcts; direction = :x, width = 0.6, color = RUNG_COLORS)
+    text!(ax, max.(pcts, 0), rows;
+          text = percent.(pcts), align = (:left, :center), offset = (6, 0), color = VIZ.text, fontsize = 12)
     vlines!(ax, 0; color = VIZ.text2, linewidth = 1)
-    xlims!(ax, -1, 1.18 * maximum(values))
+    xlims!(ax, -1, 1.18 * maximum(pcts))
     fig
 end
 
 # ╔═╡ 30322a8e-584a-5ad0-9d57-ce045cffb6a4
 with_theme(THEME) do
     fig = Figure(size = (760, 460))
-    ax = Axis(fig[1, 1]; xscale = log10, xticks = ([1e3, 1e4, 1e5, 1e6], ["1 KB", "10 KB", "100 KB", "1 MB"]),
-              xlabel = "size of X", ylabel = "bits saved on Y, % of C(Y)", title = "The saving grows with the amount of related text")
+    ax = Axis(fig[1, 1];
+              title = "The saving grows with the amount of related text",
+              xlabel = "size of X",
+              ylabel = "bits saved on Y, % of C(Y)",
+              xscale = log10,
+              xticks = ([1e3, 1e4, 1e5, 1e6], ["1 KB", "10 KB", "100 KB", "1 MB"]))
     hlines!(ax, 0; color = VIZ.text2, linewidth = 1)
     for (g, color, marker) in zip(growth, RUNG_COLORS, RUNG_MARKERS)
         scatterlines!(ax, g.sizes, g.pcts; color, marker, markersize = 9, linewidth = 2, label = g.name)
@@ -611,8 +656,11 @@ end
 # ╔═╡ 95429bb2-8f02-5b81-885d-c3d660d5b71d
 with_theme(THEME) do
     fig = Figure(size = (760, 460))
-    ax = Axis(fig[1, 1]; xticks = 1:2:19, xlabel = "zstd level", ylabel = "bits saved on Y, % of C(Y)",
-              title = "A better compressor gets more out of the same $(human(X_BYTES))")
+    ax = Axis(fig[1, 1];
+              title = "A better compressor gets more out of the same $(human(X_BYTES))",
+              xlabel = "zstd level",
+              ylabel = "bits saved on Y, % of C(Y)",
+              xticks = 1:2:19)
     hlines!(ax, 0; color = VIZ.text2, linewidth = 1)
     for (l, color, marker) in zip(by_level, RUNG_COLORS, RUNG_MARKERS)
         scatterlines!(ax, LEVELS, l.pcts; color, marker, markersize = 9, linewidth = 2, label = l.name)
@@ -2560,7 +2608,7 @@ uuid = "23338594-aafe-5451-b93e-139f81909106"
 # ╠═5b8da8fe-341f-58fb-b542-39295a8dafd8
 # ╠═8f96d614-b186-5f22-90f3-eee491e96641
 # ╟─cb48734c-71a1-5db1-8d26-683ce53bb608
-# ╟─2efc182d-bac3-58f9-bb99-74a9b806b47e
+# ╠═2efc182d-bac3-58f9-bb99-74a9b806b47e
 # ╠═51a4d8e4-41f0-598a-8551-3be4f8766f07
 # ╠═e9fa7345-6560-593c-ab56-3d3dfc4b40ff
 # ╠═a240f10f-2e89-5385-90de-b40f823426be
