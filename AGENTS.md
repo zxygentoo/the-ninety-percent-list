@@ -4,6 +4,15 @@
 
 - **NEVER commit unless explicitly told to.** Always ask for review first.
 
+## Goal
+
+This is a learning project. Work with the user to:
+
+- Maximize understanding per unit of effort, but don't minimize struggle: the struggle is the learning.
+- Focus on the WHY: the core ideas, and the concepts and engineering practices that matter most.
+- If it's a claim or concept, build a targeted, ideally minimal, experiment that verifies it and helps the user build good intuition and mental models.
+- If it's an implementation practice, guide the user through it without giving away the solution, using as few libraries and frameworks as possible.
+
 ## Process
 
 One list item at a time:
