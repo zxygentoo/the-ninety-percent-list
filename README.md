@@ -81,7 +81,7 @@ The worldview. Prediction is compression, and a network is an approximation to t
 6. **[The First Law of Complexodynamics](https://scottaaronson.blog/?p=762) + [The Coffee Automaton](https://arxiv.org/abs/1405.6903)** `Ilya`  
    Aaronson · 2011 · blog post; Aaronson, Carroll, Ouellette · 2014 · arXiv:1405.6903
 
-   What "interesting structure" is, and why it lives between order and noise. The most idiosyncratic items on the list, and the question you are compressing toward.
+   What "interesting structure" is, and why it lives between order and noise. The most idiosyncratic items on the list, and an open question: why complexity rises and then falls while entropy only grows.
 
 ### B · The lineage
 
@@ -115,7 +115,7 @@ History that carries the why. Each design here is the answer to a failure of the
 12. **[Attention Is All You Need](https://arxiv.org/abs/1706.03762) + [The Annotated Transformer](https://nlp.seas.harvard.edu/annotated-transformer/)** `Ilya` `implement`  
    Vaswani et al. · 2017 · arXiv:1706.03762; Rush et al. (Harvard NLP) · 2018, revised 2022
 
-   You can already build it, so re-read it as a subtraction: what from items 8–11 was kept, what was dropped, and why.
+   Items 8–11, distilled: attention and residual connections kept, recurrence dropped, and positional encodings added to supply the order that recurrence gave for free. Build it in full, asking of each piece which earlier failure it answers.
 
 13. **[Neural Message Passing for Quantum Chemistry](https://arxiv.org/abs/1704.01212)** `Ilya`  
    Gilmer, Schoenholz, Riley, Vinyals, Dahl · 2017 · arXiv:1704.01212
@@ -154,7 +154,7 @@ History that carries the why. Each design here is the answer to a failure of the
 19. **[Reinforcement Learning: An Introduction](http://incompleteideas.net/book/the-book-2nd.html)**  
    Sutton, Barto · 2nd ed., 2018 · book (free PDF) · chapters 1–6 and 13
 
-   The one textbook. RL is the pillar an implement-the-transformer background usually lacks, and every item after this assumes it.
+   The one textbook. RL is the pillar a deep-learning background often lacks, and every item after this assumes it.
 
 20. **[Mastering the Game of Go without Human Knowledge](https://www.nature.com/articles/nature24270) + [AlphaZero](https://arxiv.org/abs/1712.01815)**  
    Silver et al. · Nature 2017; Silver et al. · 2017 · arXiv:1712.01815
@@ -169,7 +169,7 @@ History that carries the why. Each design here is the answer to a failure of the
 22. **[The Bitter Lesson](http://www.incompleteideas.net/IncIdeas/BitterLesson.html)**  
    Sutton · 2019 · essay
 
-   Two pages. The premise of the scaling era, and the thing Ilya now says is incomplete.
+   Two pages. The premise of the scaling era, and the thing Sutskever has since called incomplete.
 
 ### D · Phenomena without an explanation
 
@@ -217,7 +217,7 @@ Where the systems meet the math.
 30. **[Let's Build GPT](https://www.youtube.com/watch?v=kCc8FmEb1nY) + [nanoGPT](https://github.com/karpathy/nanoGPT) + [llm.c](https://github.com/karpathy/llm.c)** `implement`  
    Karpathy · 2023 video (~2 h) · 2022 repo · 2024 repo
 
-   Replaces CS231n. Not reading: implementing. Use them as references to check your own build against, not to copy from.
+   Stands in for the original's CS231n course. Not reading: implementing. Use them as references to check your own build against, not to copy from.
 
 ## Provenance
 
