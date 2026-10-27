@@ -18,12 +18,6 @@ md"""
 *Sutskever's compression argument, tested with an ordinary compressor and a novel.*
 
 In a 2023 talk at the Simons Institute, [*An Observation on Generalization*](https://simons.berkeley.edu/talks/ilya-sutskever-openai-2023-08-14), Ilya Sutskever asked why unsupervised learning works at all, and answered with compression. This notebook turns that answer into an experiment.
-
-**Prerequisites**
-
-- Basic probability, including conditional probability, and logarithms.
-- How a language model is trained, roughly: it predicts the next token, and gradient descent lowers its cross-entropy loss.
-- No [information theory](https://en.wikipedia.org/wiki/Information_theory): the notebook introduces what it uses.
 """
 
 # ╔═╡ c331071a-b435-4482-83f4-9f06dd3f0af3
@@ -32,6 +26,15 @@ html"""
         style="width: 100%; aspect-ratio: 16 / 9; border: 0;"
         allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
         referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+"""
+
+# ╔═╡ c92d84d1-4fa6-4750-bd94-94ce5ce01b1c
+md"""
+**Prerequisites**
+
+- Basic probability, including conditional probability, and logarithms.
+- How a language model is trained, roughly: it predicts the next token, and gradient descent lowers its cross-entropy loss.
+- No [information theory](https://en.wikipedia.org/wiki/Information_theory): the notebook introduces what it uses.
 """
 
 # ╔═╡ 2c83d185-422a-5af7-9fce-7c99ce734229
@@ -158,13 +161,6 @@ Three predictions follow, and the rest of this notebook tests each one:
 1. **Unrelated data costs nothing.** If ``X`` shares nothing with ``Y``, a good compressor ignores it: ``C(Y \mid X) \approx C(Y)``.
 2. **Related data helps, and more of it helps more.** The saving grows with what ``X`` and ``Y`` have in common, and with how much ``X`` there is.
 3. **A better compressor finds more.** Given the same ``X``, a compressor closer to ``K`` extracts more of what ``X`` shares with ``Y``.
-"""
-
-# ╔═╡ 1d1f89d8-4de4-526c-a60f-862c213a77b2
-md"""
-## Setup
-
-Pluto installs the packages on first run. The compressor is the zstd C library, called through the plain Julia wrappers in the `CodecZstd` package; nothing outside Julia runs. The texts are downloaded once into `data/` next to this notebook.
 """
 
 # ╔═╡ 833a76f1-a7ef-45b3-9d11-6b92f1ea3120
@@ -2648,14 +2644,14 @@ uuid = "23338594-aafe-5451-b93e-139f81909106"
 # ╔═╡ Cell order:
 # ╟─fdfcd5cc-ed29-5406-83a2-023cf5021853
 # ╟─c331071a-b435-4482-83f4-9f06dd3f0af3
+# ╟─c92d84d1-4fa6-4750-bd94-94ce5ce01b1c
+# ╠═4179174c-6ee4-520b-9c58-f6262778cb94
+# ╟─833a76f1-a7ef-45b3-9d11-6b92f1ea3120
 # ╟─2c83d185-422a-5af7-9fce-7c99ce734229
 # ╟─23bd693b-a7da-573d-8f5d-ac8b61626bd8
 # ╟─c65512c4-bab7-44b1-a30f-4f2223cd9eca
 # ╟─0c3334f8-3464-4c24-a358-a10c162d80e1
 # ╟─dcfb1941-2f44-4294-9394-0c2baccd5fb4
-# ╟─1d1f89d8-4de4-526c-a60f-862c213a77b2
-# ╠═4179174c-6ee4-520b-9c58-f6262778cb94
-# ╟─833a76f1-a7ef-45b3-9d11-6b92f1ea3120
 # ╠═1d77adbb-cc37-53f6-b0f3-635453e64314
 # ╟─ee5e727f-9b96-5369-bb82-a2685b158eec
 # ╠═188edca4-84ae-5275-8020-e2169ac6db41
