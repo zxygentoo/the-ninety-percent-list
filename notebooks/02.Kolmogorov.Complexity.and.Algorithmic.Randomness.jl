@@ -68,7 +68,7 @@ The definition says what ``K(x)`` is, but not how to find it.
 
 # ╔═╡ ecdc07f2-09b3-4776-b9e2-1c95157bcb7c
 md"""
-## A little machine to find ``K``
+## A little machine to search for ``K``
 
 The obvious way to find the shortest description is to try them all, shortest first, and stop at the first that prints the string. For that we need a decompressor simple enough to run millions of times.
 
@@ -418,15 +418,39 @@ Here are three strings of the same length, 24 bits: two with structure, one with
 
 # ╔═╡ cf49ed6a-21fc-4a87-b44b-5fe8b3377b3d
 md"""
-Almost none. This is the simplest fact in chapter 1 (Theorem 5), and it takes nothing but counting.
+Almost none.
 
-There are ``2^0 + 2^1 + \cdots + 2^{m-1} = 2^m - 1`` bit strings shorter than ``m`` bits, so fewer than ``2^m`` descriptions shorter than ``m`` bits, and each describes at most one string. Of the ``2^n`` strings of length ``n``, then, fewer than ``2^{n-k}`` have a description shorter than ``n - k`` bits:
+Short descriptions are scarce, and counting them is enough to show it.
 
-```math
-\frac{\#\{\, x \text{ of length } n \;:\; K(x) < n - k \,\}}{2^n} \;<\; 2^{-k}
-```
+Take the 24-bit strings, all 16,777,216 of them, and ask how many can be compressed by more than 4 bits: to a description of 19 bits or fewer.
 
-Fewer than half of all strings have a description shorter than ``n - 1`` bits, and fewer than one in a thousand one shorter than ``n - 10``. Counting doesn't care what the machine is, so this holds for ``Kt``, which is never below ``K``, for zstd, and for every neural network.
+Count the descriptions that short. There is 1 bit string of length 0, there are 2 of length 1, 4 of length 2, and so on, up to ``2^{19}`` of length 19. Add them up and a pattern shows: ``1 + 2 = 3``, one less than 4; ``1 + 2 + 4 = 7``, one less than 8. Each length doubles the one before, so the total always stays one short of the next. Up to length 19, it comes to ``2^{20} - 1``: 1,048,575 descriptions.
+
+Each description prints at most one string. So at most 1,048,575 of the 16,777,216 strings can be compressed by more than 4 bits: fewer than one in 16.
+
+Nothing here depends on 24 or on 4. Each extra bit of compression halves the number of descriptions that short, and so halves the share of strings that can have one:
+
+| compressed by more than | share of strings, at most |
+|:--|:--|
+| 1 bit | half |
+| 4 bits | one in 16 |
+| 10 bits | one in a thousand |
+| 20 bits | one in a million |
+
+A string that no description compresses by much has no structure to find. Such strings are what the book calls [*random*](https://en.wikipedia.org/wiki/Kolmogorov_complexity#Kolmogorov_randomness), and the table says they are the norm. The book names the bits a string's best description saves, ``n - K(x)``, its *randomness deficiency* (p. 8), and puts the count in those terms:
+
+!!! info "Counting (Theorem 5 in the book)"
+    Of the ``2^n`` strings of ``n`` bits, fewer than ``2^{n-k}`` have a deficiency above ``k``. As a share of all of them:
+
+    ```math
+    \frac{\#\{\, x \text{ of } n \text{ bits} \;:\; n - K(x) > k \,\}}{2^n} \;<\; \frac{2^{n-k}}{2^n} \;=\; 2^{-k}
+    ```
+
+    - ``n - K(x)`` is the deficiency of ``x``, the bits its best description saves;
+    - ``\#\{\ldots\}`` counts the strings that save more than ``k`` bits;
+    - ``2^{n-k}`` bounds that count: fewer descriptions than that are shorter than ``n - k`` bits, and each describes at most one string.
+
+Counting doesn't care what the machine is, so this holds for ``Kt``, which is never below ``K``, for zstd, and for every neural network.
 
 The book turns this into a bet (p. 8). Toss a coin 80,000 times and save the result as a 10,000-byte file. No compressor that existed before the tosses will shrink it by more than 10 bytes: the chance that any one compressor does is below ``2^{-80}``, and there aren't that many compressors.
 """
@@ -437,6 +461,15 @@ The book turns this into a bet (p. 8). Toss a coin 80,000 times and save the res
 simplest = let runs = [(p, run_program(p; cap = CAP, fits = out -> length(out) <= 24)) for m in 0:7 for p in PROGRAMS[m]]
     Dict(unique(first, [r.out => p for (p, r) in runs if r.ended == :halted]))
 end;
+
+# ╔═╡ c8f8369b-1fb2-4d98-8315-d61b8ae35537
+md"""
+So a typical string is like the coin flips: random, with no shorter description to find. A search for its best description has to try everything shorter than the string itself first, and that is why the search is expensive.
+
+This notebook began by asking whether the best compressor can be found. Not exactly, since ``K`` is not computable. Not in time either: ``Kt`` is computable, but since most strings are random, its search grows exponentially with their length.
+
+Practical compressors live with this by narrowing the search. zstd looks only for back-references; a neural network looks only for what its weights can express, found by gradient descent rather than one program at a time. Both give up the guarantee of the shortest description to get *a* description, in time, and ``K`` remains the yardstick they are measured against.
+"""
 
 # ╔═╡ ad737d1a-f371-48ec-835b-25fb565b39cd
 md"""
@@ -456,21 +489,6 @@ TARGETS = ["0"^16, "01"^8, "0"^24, "0110100010111001", coin(20)]
 # ╔═╡ e9fd5fb3-2a61-41ba-86bd-5ba50268fcc7
 k_table = [(; x, shortest(x; cap = CAP)...) for x in TARGETS]
 
-# ╔═╡ c31f8dd3-af67-4898-93ca-69baf74a9ba5
-let zeros16 = k_table[1], per_bit = (length(PROGRAMS[9]) / length(PROGRAMS[8]))^(1 / 3)
-    Markdown.parse("""
-    ## What this shows
-
-    1. **``K`` is the best compressor, but a search for it doesn't settle.** What a search finds within a step cap is only an upper bound: a program the cap set aside might be shorter, as `$(zeros16.description)` would have been with a cap of 10.
-    2. **``K`` is not computable.** A program still running might be slow or might never stop, and Berry's paradox shows that no algorithm can compute ``K``.
-    3. **``Kt`` charges for running time, and its search ends.** It adds ``\\log_2 t`` bits for running time, every program gets a deadline, and Levin search returns an exact answer.
-    4. **Nothing is cheap.** Both searches grow by about ×$(round(per_bit; digits = 2)) per bit of string, and a 128-bit string is already out of reach.
-    5. **Structure is rare, randomness is the norm.** A search must rule out every description shorter than the best one, and for most strings the best is the string itself: fewer than one string in ``2^k`` has a description ``k`` bits shorter, on any machine.
-
-    Practical compressors live with this by narrowing the search. zstd looks only for back-references; a neural network looks only for what its weights can express, found by gradient descent rather than one program at a time. Both give up the guarantee of the shortest description to get *a* description, in time. ``K`` is the yardstick they are measured against, and ``Kt`` shows that even a computable version of the yardstick is out of reach.
-    """)
-end
-
 # ╔═╡ 3043a622-07a7-4fc4-a9ab-504ec6d495df
 kt_table = [(; x, levin(x)...) for x in TARGETS]
 
@@ -486,40 +504,24 @@ contrast = [(; x, K = shortest(x; cap = CAP), Kt = levin(x)) for x in ["0"^24, "
 # ╔═╡ 3ba9b3cf-f3f6-4cfc-8909-e4f70cbde016
 commas(n::Integer) = replace(string(n), r"(?<=\d)(?=(\d{3})+$)" => ",")
 
-# ╔═╡ ced6454d-9de0-4281-a249-5d51c309081a
-let rows = map(c -> "| `$(c.x)` | $(c.K.bits) | $(commas(c.K.tried)) | $(@sprintf("%.2f", c.Kt.Kt)) | $(commas(c.Kt.tried)) |", contrast)
-    structured, flips = first(contrast), last(contrast)
-    Markdown.parse("""
-    | string | ``K``, best found | programs tried | ``Kt`` | programs tried |
-    |:--|--:|--:|--:|--:|
-    $(join(rows, "\n"))
-
-    The coin flips cost the search for ``K`` $(round(Int, flips.K.tried / structured.K.tried)) times as many programs as the 0s, and Levin search $(round(Int, flips.Kt.tried / structured.Kt.tried)) times as many. Each search runs until it reaches the string's best description, and there are up to ``2^\\ell`` descriptions shorter than ``\\ell`` bits. So the cost of a search grows exponentially with the string's complexity, not its length.
-
-    So the question becomes: how many strings have structure?
-    """)
-end
-
 # ╔═╡ e2108ad6-af44-4f61-bb16-b2a7c6644024
-let rows = map((16, 20, 24)) do n
-        K = [1 + 3length(p) for (x, p) in simplest if length(x) == n]
-        "| $n | $(commas(2^n)) | $(count(<(n), K)) | $(count(<(n - 4), K)) | $(commas(2^(n - 4) - 1)) |"
+let lengths = [1 + 3length(p) for (x, p) in simplest if length(x) == 24]
+    rows = map((1, 4, 10)) do k
+        "| $k bit$(k == 1 ? "" : "s") | $(commas(2^(24 - k) - 1)) | $(count(<(24 - k), lengths)) |"
     end
     rare = sort([(x, p) for (x, p) in simplest if length(x) == 24 && 1 + 3length(p) < 20]; by = last)
     Markdown.parse("""
-    On our machine, structure is rarer still. Here is every program of up to 7 instructions, run for up to $(commas(CAP)) steps, against every string of 16, 20 and 24 bits:
+    On our machine, structure is rarer still. Here is every program of up to 7 instructions, run for up to $(commas(CAP)) steps, against the $(commas(2^24)) strings of 24 bits:
 
-    | bits | strings | with a description shorter than the string | shorter by more than 4 bits | counting allows up to |
-    |--:|--:|--:|--:|--:|
+    | compressed by more than | counting allows | our machine finds |
+    |:--|--:|--:|
     $(join(rows, "\n"))
 
-    The $(length(rare)) strings of 24 bits that compress by more than 4 bits are each a three-bit pattern, repeated:
+    The $(length(rare)) that compress by more than 4 bits are each a three-bit pattern, repeated:
 
     $(join(("- `$x`, printed by `$p`" for (x, p) in rare), "\n"))
 
-    Counting leaves room for $(commas(2^20 - 1)) of them. Our machine finds $(length(rare)), because the only structure it can express is repetition. A richer machine would find more. None can find more than counting allows.
-
-    So a typical string is like the coin flips. It has no structure to find, and the search for its best description has to try every shorter description first. Structure is rare, and that is why searching for it is expensive.
+    Our machine finds so few because the only structure it can express is repetition. A richer machine would find more. None can find more than counting allows.
     """)
 end
 
@@ -618,6 +620,20 @@ let
     - For $(length(flips.x)) coin flips, the best is still the literal: $(f.bits) bits, printed in $(f.steps) steps, so ``Kt = $(f.bits) + \\log_2 $(f.steps) = $(@sprintf("%.2f", flips.Kt))``.
 
     No step cap had to be chosen, and nothing was left running. But look at the last column.
+    """)
+end
+
+# ╔═╡ ced6454d-9de0-4281-a249-5d51c309081a
+let rows = map(c -> "| `$(c.x)` | $(shown(c.K.description)) | $(c.K.bits) | $(commas(c.K.tried)) | $(commas(c.Kt.tried)) |", contrast)
+    structured, flips = first(contrast), last(contrast)
+    Markdown.parse("""
+    | string | best description | its bits | programs tried, search for ``K`` | programs tried, Levin search |
+    |:--|:--|--:|--:|--:|
+    $(join(rows, "\n"))
+
+    The coin flips cost the search for ``K`` $(round(Int, flips.K.tried / structured.K.tried)) times as many programs as the 0s, and Levin search $(round(Int, flips.Kt.tried / structured.Kt.tried)) times as many. All three strings are 24 bits long; what sets the cost is the length of the best description.
+
+    How many strings, then, have a short one?
     """)
 end
 
@@ -2691,7 +2707,7 @@ uuid = "23338594-aafe-5451-b93e-139f81909106"
 # ╟─cf49ed6a-21fc-4a87-b44b-5fe8b3377b3d
 # ╠═671cfa11-e1d1-4340-8474-fee239bb1697
 # ╟─e2108ad6-af44-4f61-bb16-b2a7c6644024
-# ╟─c31f8dd3-af67-4898-93ca-69baf74a9ba5
+# ╟─c8f8369b-1fb2-4d98-8315-d61b8ae35537
 # ╟─ad737d1a-f371-48ec-835b-25fb565b39cd
 # ╟─6155e11b-8a04-462c-9590-05a5bd4f9d1f
 # ╟─3ba9b3cf-f3f6-4cfc-8909-e4f70cbde016
