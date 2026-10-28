@@ -10,11 +10,14 @@ Each item is worked through as a **Build**: the smallest thing to implement that
 
 ## Notebooks
 
-Progress: **1 / 30** items built `█░░░░░░░░░░░░░░░░░░░░░░░░░░░░░`
+[All notebooks](https://zxygentoo.github.io/the-ninety-percent-list/)
 
-| Item | Notebook | Build |
-|--:|:--|:--|
-| 1 | [01 · An Observation on Generalization](https://zxygentoo.github.io/the-ninety-percent-list/01.An.Observation.on.Generalization.html) | zstd, handed a corpus *X* as its dictionary, measures the bits *X* saves on *Y*, the ending of *Pride and Prejudice*. Four kinds of *X*: random noise, other authors, Austen's other novels, the book's earlier chapters. Noise saves nothing; the saving grows with relatedness, with the amount of *X*, and with the compressor's effort. |
+Progress: **2 / 30** items built `██░░░░░░░░░░░░░░░░░░░░░░░░░░░░`
+
+| Item | Notebook | Status |
+|--:|:--|:-:|
+| 1 | [01 · An Observation on Generalization](https://zxygentoo.github.io/the-ninety-percent-list/01.An.Observation.on.Generalization.html) | ✅ |
+| 2 | [02 · Kolmogorov Complexity and Algorithmic Randomness](https://zxygentoo.github.io/the-ninety-percent-list/02.Kolmogorov.Complexity.and.Algorithmic.Randomness.html) | ✅ |
 
 ### Running a notebook
 
@@ -62,6 +65,8 @@ The worldview. Prediction is compression, and a network is an approximation to t
    Shen, Uspensky, Vereshchagin · AMS 2017 · book (free PDF) · chapters 1–2 only
 
    The ideal compressor. Every learning method is an approximation to it.
+
+   **Build:** [02 · Kolmogorov Complexity and Algorithmic Randomness](https://zxygentoo.github.io/the-ninety-percent-list/02.Kolmogorov.Complexity.and.Algorithmic.Randomness.html)
 
 3. **[A Tutorial Introduction to the Minimum Description Length Principle](https://arxiv.org/abs/math/0406077)** `Ilya`  
    Grünwald · 2004 · arXiv:math/0406077
