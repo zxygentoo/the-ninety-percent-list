@@ -21,7 +21,7 @@ Progress: **2 / 30** items built `██░░░░░░░░░░░░░�
 
 ### Running a notebook
 
-1. Install Julia (the notebooks are tested with 1.13), for example with [juliaup](https://github.com/JuliaLang/juliaup).
+1. Install Julia by following the [official instructions](https://julialang.org/downloads/). The notebooks are tested with 1.13.
 2. Install Pluto and start it:
 
    ```julia
