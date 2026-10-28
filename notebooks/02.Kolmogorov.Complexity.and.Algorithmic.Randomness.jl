@@ -57,13 +57,11 @@ The length of the shortest program is the string's *Kolmogorov complexity*, ``K(
     - ``|d|`` is the length of a description, in bits;
     - ``\min`` picks the shortest.
 
-    The book also calls ``D`` a *description mode*, and writes ``C`` where we write ``K``: it saves ``K`` for a variant, prefix complexity, in chapter 4. Notebook 01 already used ``C`` for a compressor's output.
+    The book also calls ``D`` a *description mode*, and writes ``C`` where we write ``K``: it saves ``K`` for a variant, prefix complexity, in chapter 4.
 
 If ``D`` is the interpreter of a programming language, a description is a program, and ``K_D(x)`` is the length of the shortest program that prints ``x``. That is the best compressor: the shortest program is the compressed file, and running it gives back ``x``.
 
-The subscript ``D`` is there because the answer depends on the decompressor. The next section builds a small one, and from then on we drop the subscript and write ``K(x)`` for complexity on it. The real ``K`` is defined on a far more capable decompressor, and a note there says how the two relate.
-
-The definition says what ``K(x)`` is, but not how to find it.
+The subscript ``D`` is there because the answer depends on the decompressor. The next section builds a small one, and from then on we drop the subscript and write ``K(x)`` for complexity on it.
 """
 
 # ╔═╡ ecdc07f2-09b3-4776-b9e2-1c95157bcb7c
@@ -176,7 +174,13 @@ end
 CAP = 1_000
 
 # ╔═╡ 7c823376-ece1-40bf-ad51-536cea674917
-examples = map(["1rr", "00rrr", "+++[01]", "1+++[r]", "+[+]"]) do program
+examples = map([
+    "1rr",
+    "00rrr",
+    "+++[01]",
+    "1+++[r]",
+    "+[+]"
+]) do program
     (; program, run_program(program; cap = CAP)...)
 end;
 
@@ -184,7 +188,7 @@ end;
 md"""
 > The rigorous ``K`` is defined on a [*universal* decompressor](https://en.wikipedia.org/wiki/Universal_Turing_machine), one that can run any program, like a Python interpreter. There are many of them, and which one hardly matters: each can run another's programs once it is handed an interpreter for them, so their ``K``s differ by about the length of that interpreter, a fixed constant (Theorem 1 in the book, and the remark after it).
 >
-> Our machine is far from universal; all it can do is repeat. But anything it prints, a universal decompressor can print too, so its ``K`` is an upper bound on the real one, up to that constant. And a search that just runs programs meets the same two problems on it as on any machine: it can't tell a slow program from one that never stops, and the number of programs to try explodes.
+> Our machine is far from universal; all it can do is repeat. But anything it prints, a universal decompressor can print too, so its ``K`` is an upper bound on the real one, up to that constant. And, as we will see, a search that just runs its programs meets the same problems as on any machine.
 """
 
 # ╔═╡ b1783191-4952-47be-8897-e857111035fd
@@ -207,7 +211,7 @@ Every string now has a description only one bit longer than itself, so ``K(x) \l
 md"""
 ### The search
 
-The search runs in rounds. Round ``m`` tries every program of ``m`` instructions, in dictionary order (`0`, `1`, `r`, `+`, `[`, `]`), and runs each one. The first round in which some program prints the target gives the answer, and the first program in it that does is the shortest program that prints it.
+The search runs in rounds, starting with round 0, the empty program. Round ``m`` runs every program of ``m`` instructions, in dictionary order (`0`, `1`, `r`, `+`, `[`, `]`), each up to the step cap, and the search stops at the first program that prints the string.
 
 Here it is looking for `0000`:
 
@@ -216,16 +220,16 @@ Here it is looking for `0000`:
 | 0 | the empty program | prints nothing |
 | 1 | `0`, `1`, `r`, `+` | `0` prints `0`; `1` goes wrong at once; `r` and `+` print nothing |
 | 2 | 17 programs, from `00` to `[]` | none prints more than two bits |
-| 3 | `000`, `001`, `00r`, … | `000` prints `000`; `001` goes wrong; **`00r` prints `0000`** |
+| 3 | `000`, `001`, `00r`, … | `000` prints `000`; `001` goes wrong; **`00r` prints `0000`, search stops** |
 
-Two things keep the rounds small:
+Two shortcuts keep the search small:
 
 - **Brackets must match.** `[` and `]` on their own describe nothing, so round 1 has four programs, not six, and round 2 has 17, not 36.
 - **A run that goes wrong is dropped.** `1` has printed `1`, which can never become `0000`, because the machine only adds to the end of its output. So the search stops running it at once.
 
-Is `00r` the shortest description of `0000`? Not on our machine. As a description it costs ``1 + 3 \times 3 = 10`` bits, and the literal only 5. A program has to beat the literal, so the search only needs rounds with fewer than ``n / 3`` instructions. For `0000` that means rounds 0 and 1, which find nothing, so ``K(0000) = 5``. Programs start to pay off at 16 bits: for sixteen 0s the search runs rounds 0 to 5, and finds `00rrr` in round 5.
+Is `00r` the shortest description of `0000`? Not on our machine. As a description it costs ``1 + 3 \times 3 = 10`` bits, and the literal only 5. A program has to beat the literal, so the search only needs rounds with fewer than ``n / 3`` instructions. For `0000` that means rounds 0 and 1, which find nothing, so ``K(0000) = 5``.
 
-Longer searches meet `+[+]` in round 4, and waiting for it to finish means waiting forever. This is what the step cap is for: a program still running at the cap is set aside, as if it had printed nothing.
+Programs start to pay off at 16 bits: for sixteen 0s the search runs rounds 0 to 5, and finds `00rrr` in round 5. And some searches meet programs that don't halt within the cap, like `+[+]` in round 4. These are set aside, as if they had printed nothing.
 """
 
 # ╔═╡ f85e3a2a-1fd2-4ac8-88b8-fb35151d4ae9
@@ -238,7 +242,8 @@ end
 # ╔═╡ 6c5acb92-ae5c-439c-8140-9f107f034ea4
 "Every program of `m` instructions whose brackets match, in dictionary order: `0`, `1`, `r`, `+`, `[`, `]`."
 function programs(m)
-    every = (join(reverse(t)) for t in Iterators.product(ntuple(_ -> INSTRUCTIONS, m)...))  # reversed, so the last position varies fastest
+    every = (join(reverse(t))    # reversed, so the last position varies fastest
+             for t in Iterators.product(ntuple(_ -> INSTRUCTIONS, m)...))
     collect(Iterators.filter(balanced, every))
 end
 
@@ -306,13 +311,13 @@ K(x) \;\le\; c + \log_2 N \;<\; N \;<\; K(x)
 
 ``K(x)`` would be less than itself.
 
-The loop is ordinary, and the counting is sound. What gave way is the one thing we supposed: a program that computes ``K``. There is none.
+The loop is ordinary, and the counting is sound. What gave way is the one thing we supposed: a program that computes ``K``. **There is none.** (The book proves a stronger form as Theorem 6.)
 
-This is [Berry's paradox](https://en.wikipedia.org/wiki/Berry_paradox), made precise (the book proves a stronger form as Theorem 6). "The first string with no description of ``N`` bits or fewer" is itself a description of that string, and a short one.
+> One caveat about our machine. The argument needs a *universal* machine, one that can run the hunt as a program. Ours is too weak, which is also why we could see through `+[+]`. ``K`` is defined on universal machines, and there no search can see through every program.
 
-> One caveat about our machine. The argument needs a *universal* machine, one that can run the hunt as a program. Ours is too weak, which is also why we could see through `+[+]`. ``K`` is defined on universal machines, and there no search can certify the answer for every string.
+So the search for ``K`` is stuck for good. For some strings, a shorter program will still be running, and the search can't know whether it is slow or will never stop.
 
-So the search for ``K`` is stuck for good. For some strings, a shorter program will still be running, and the search can't know whether it is slow or will never stop. What can we do now?
+What can we do now?
 """
 
 # ╔═╡ a25b45c3-a2f3-431b-aec6-31e1fa36106b
@@ -468,9 +473,9 @@ end;
 md"""
 ---
 
-This notebook began by asking whether the best compressor can be found. Not exactly, since ``K`` is not computable. Not cheaply either: ``Kt`` is computable, but since most strings are random, its search grows exponentially with their length. No faster way is known, though no one has proved there isn't one.
+This notebook began by asking whether the best compressor can be found. The answer is no: ``K`` is not computable. And ``Kt``, though computable, can't be found cheaply: since most strings are random, its search grows exponentially with their length. No faster way is known, though no one has proved there isn't one.
 
-Practical compressors live with this by narrowing the search. zstd looks only for back-references; a neural network looks only for what its weights can express, found by gradient descent rather than one program at a time. Both give up the guarantee of the shortest description to get *a* description, in time, and ``K`` remains the yardstick they are measured against.
+Practical compressors live with this by narrowing the search. zstd looks only for back-references; a neural network looks only for what its weights can express, searching by gradient descent rather than one program at a time. Both give up the guarantee of the shortest description to get *a* description, in time, and ``K`` remains the yardstick they are measured against.
 """
 
 # ╔═╡ ad737d1a-f371-48ec-835b-25fb565b39cd
@@ -566,13 +571,11 @@ ending(ended) = ended == :halted ? "halted" : ended == :capped ? "still running 
 
 # ╔═╡ 17b8298f-1257-4915-a1f4-b61583668c7e
 Markdown.parse("""
-Five programs, run by the code above. `+[+]` would never stop, so each run gets a *step cap*: after $(commas(CAP)) steps, a run still going is stopped.
+Five programs, run by the code above. `+[+]` is an infinite loop, so every run gets a *step cap*: after $(commas(CAP)) steps, it is stopped.
 
 | program | output | steps | ended |
 |:--|:--|--:|:--|
 $(join(("| `$(e.program)` | $(isempty(e.out) ? "(nothing)" : "`$(e.out)`") | $(commas(e.steps)) | $(ending(e.ended)) |" for e in examples), "\n"))
-
-In `+++[01]` and `1+++[r]`, three `+`s make the loop body run three times.
 """)
 
 # ╔═╡ 130bc65b-f1fa-49a3-9161-f8ffddd0d225
@@ -599,8 +602,6 @@ let zeros16 = k_table[1], flips = k_table[end], stingy = shortest(zeros16.x; cap
     - **The literal is only what we found.** For the $(length(flips.x)) coin flips, no program beat the $(flips.bits)-bit literal. To call the literal *shortest*, we would have to rule out every shorter program, including the ones the cap set aside.
 
     `+[+]` is one of those. Run it for a thousand steps, or a billion, and all we learn is that it hasn't stopped *yet*. Is it slow, or will it never stop? Running it can't tell us.
-
-    Here we can read the program and see that it loops forever, and on a machine this simple, a cleverer search could do that for every program. On a universal machine, it can't. That is a theorem.
     """)
 end
 
@@ -715,7 +716,7 @@ PlutoUI = "~0.7.83"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.13.2"
+julia_version = "1.13.3"
 manifest_format = "2.1"
 project_hash = "fc2096343272ca2231623ee0d1e2e80b1bc1ee91"
 
@@ -1794,7 +1795,7 @@ version = "0.3.4"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
-version = "2026.8.13"
+version = "2026.10.20"
 
 [[deps.MuladdMacro]]
 deps = ["PrecompileTools"]
@@ -1910,7 +1911,7 @@ version = "2.0.3"
 [[deps.PCRE2_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "efcefdf7-47ab-520b-bdef-62a2eaa19f15"
-version = "10.46.0+0"
+version = "10.47.0+0"
 
 [[deps.PDMats]]
 deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse"]
