@@ -182,8 +182,8 @@ end;
 
 # ╔═╡ 6e89b6a2-a2d2-4e7f-a084-3319f9e258fc
 md"""
-> The rigorous ``K`` is defined on a [*universal* decompressor](https://en.wikipedia.org/wiki/Universal_Turing_machine), one that can run any program, like a Python interpreter. There are many of them, and which one hardly matters: each can run another's programs once it is handed an interpreter for them, so their ``K``s differ by about the length of that interpreter, a fixed constant (Theorem 1 in the book).
-
+> The rigorous ``K`` is defined on a [*universal* decompressor](https://en.wikipedia.org/wiki/Universal_Turing_machine), one that can run any program, like a Python interpreter. There are many of them, and which one hardly matters: each can run another's programs once it is handed an interpreter for them, so their ``K``s differ by about the length of that interpreter, a fixed constant (Theorem 1 in the book, and the remark after it).
+>
 > Our machine is far from universal; all it can do is repeat. But anything it prints, a universal decompressor can print too, so its ``K`` is an upper bound on the real one, up to that constant. And a search that just runs programs meets the same two problems on it as on any machine: it can't tell a slow program from one that never stops, and the number of programs to try explodes.
 """
 
@@ -207,7 +207,7 @@ Every string now has a description only one bit longer than itself, so ``K(x) \l
 md"""
 ### The search
 
-The search runs in rounds. Round ``m`` tries every program of ``m`` instructions, in dictionary order (`0`, `1`, `r`, `+`, `[`, `]`), and runs each one. The first round in which some program prints the target gives the answer, and the first program in it that does is the shortest description.
+The search runs in rounds. Round ``m`` tries every program of ``m`` instructions, in dictionary order (`0`, `1`, `r`, `+`, `[`, `]`), and runs each one. The first round in which some program prints the target gives the answer, and the first program in it that does is the shortest program that prints it.
 
 Here it is looking for `0000`:
 
@@ -308,18 +308,18 @@ K(x) \;\le\; c + \log_2 N \;<\; N \;<\; K(x)
 
 The loop is ordinary, and the counting is sound. What gave way is the one thing we supposed: a program that computes ``K``. There is none.
 
-This is [Berry's paradox](https://en.wikipedia.org/wiki/Berry_paradox), made precise (Theorem 6 in the book). "The first string with no description of ``N`` bits or fewer" is itself a description of that string, and a short one.
+This is [Berry's paradox](https://en.wikipedia.org/wiki/Berry_paradox), made precise (the book proves a stronger form as Theorem 6). "The first string with no description of ``N`` bits or fewer" is itself a description of that string, and a short one.
 
-> One caveat about our machine. The argument needs a *universal* machine, one that can run the hunt as a program. Ours is too weak, which is also why we could see through `+[+]`. ``K`` is defined on universal machines, and there no amount of searching can certify the answer.
+> One caveat about our machine. The argument needs a *universal* machine, one that can run the hunt as a program. Ours is too weak, which is also why we could see through `+[+]`. ``K`` is defined on universal machines, and there no search can certify the answer for every string.
 
-So the search for ``K`` is stuck for good. There is always a shorter program it can't rule out, because it can't know whether that program is slow or will never stop. What can we do now?
+So the search for ``K`` is stuck for good. For some strings, a shorter program will still be running, and the search can't know whether it is slow or will never stop. What can we do now?
 """
 
 # ╔═╡ a25b45c3-a2f3-431b-aec6-31e1fa36106b
 md"""
 ## ``Kt``, the cost of running things
 
-If we can't tell slow from never, stop waiting: make the waiting cost something. A slow description then loses to a fast one, the way a long description loses to a short one. We give up a little compression, since the shortest description might be a slow one. In exchange, the search ends.
+If we can't tell slow from never, stop waiting: make the waiting cost something. A slow description then loses to a fast one, the way a long description loses to a short one. We give up some compression, since the shortest description might be a slow one. In exchange, the search ends.
 
 Every description now has two costs: how long it is, and how long it runs. Here are the strings from the start of this notebook again, each with a description:
 
@@ -351,7 +351,9 @@ The rate is one bit per doubling: running twice as long costs the same as being 
 - The ``\pi`` program pays about 40 bits for its trillions of steps, against the 3.3 million bits of the digits themselves.
 - The literal of the coin flips pays ``\log_2 16 = 4`` bits.
 
-The formula shows the price we pay: ``Kt(x) \ge K(x)``, since ``\log_2 t`` is never negative. If the shortest description is fast, ``Kt`` is only a few bits worse than ``K``. If it is slow, ``Kt`` settles for a longer one that runs faster. On a universal machine a short program can run for longer than the age of the universe, and then the gap can be large. On our machine it never comes to that: for every string of up to 24 bits, ``Kt``'s best description is the shortest one, so the price is just the ``\log_2 t``.
+The formula shows the price we pay: ``Kt(x) \ge K(x)``, since ``\log_2 t`` is never negative. If the shortest description is fast, ``Kt`` is only a few bits worse than ``K``. If it is slow, ``Kt`` settles for a longer one that runs faster.
+
+On a universal machine a short program can run for longer than the age of the universe, and then the gap can be large. On our machine it never comes to that: for every string of up to 24 bits, ``Kt``'s best description is the shortest one, so the price is just the ``\log_2 t``.
 
 ``Kt`` is not in the book, which calls resource-bounded complexity "outside the scope of our book" (p. 377). Levin defined it in a [1984 paper](https://www.cs.bu.edu/fac/lnd/pdf/inf.pdf), building on his 1973 *universal search*; he used natural logarithms, and this notebook uses base 2 throughout.
 
@@ -359,7 +361,7 @@ The formula shows the price we pay: ``Kt(x) \ge K(x)``, since ``\log_2 t`` is ne
 
 The logarithm turns the step cap from a guess into a rule. **Levin search** runs in phases ``k = 1, 2, 3, \ldots``, and in phase ``k`` a description of ``\ell`` bits may run for ``2^{k - \ell}`` steps. That is exactly enough for every description with ``\ell + \log_2 t \le k``. So:
 
-- When a phase ends, every description has either printed, or run out of steps, in which case it scores above ``k`` even if it prints ``x`` later.
+- When a phase ends, any description still unfinished has used up its budget, so it would score above ``k`` even if it printed ``x`` later.
 - The first phase in which some description prints ``x`` is ``\lceil Kt(x) \rceil``, and the best description in it gives ``Kt(x)`` exactly.
 
 `+[+]` gets a budget like every other program. When it runs out, the search moves on. A program that never halts can no longer hold up the answer.
@@ -369,8 +371,8 @@ The logarithm turns the step cap from a guess into a rule. **Levin search** runs
 """
     phase(x, k)
 
-Phase `k` of Levin search for `x`: every description of l ≤ k bits runs for 2^(k - l) steps.
-Returns the descriptions that printed `x`, each scored by l + log2(steps), and how many programs ran.
+Phase `k` of Levin search for `x`: every description of `l ≤ k` bits runs for `2^(k - l)` steps.
+Returns the descriptions that printed `x`, each scored by `l + log2(steps)`, and how many programs ran.
 """
 function phase(x, k)
     n = length(x)
@@ -401,7 +403,7 @@ end
 md"""
 ## Nothing is cheap
 
-``Kt``'s search always comes back, which ``K``'s never can. But it pays in the same currency as the search for ``K``: programs tried. Here is the cost of both, for coin-flip strings of every length from 4 to 24 bits.
+``Kt``'s search always comes back, which ``K``'s can't promise. But it pays in the same currency as the search for ``K``: programs tried. Here is the cost of both, for coin-flip strings of every length from 4 to 24 bits.
 """
 
 # ╔═╡ 9a0e8619-395a-4c83-a4eb-cb01e219458e
@@ -424,7 +426,7 @@ Short descriptions are scarce, and counting them is enough to show it.
 
 Take the 24-bit strings, all 16,777,216 of them, and ask how many can be compressed by more than 4 bits: to a description of 19 bits or fewer.
 
-Count the descriptions that short. There is 1 bit string of length 0, there are 2 of length 1, 4 of length 2, and so on, up to ``2^{19}`` of length 19. Add them up and a pattern shows: ``1 + 2 = 3``, one less than 4; ``1 + 2 + 4 = 7``, one less than 8. Each length doubles the one before, so the total always stays one short of the next. Up to length 19, it comes to ``2^{20} - 1``: 1,048,575 descriptions.
+Count the descriptions that short. There is one string of length 0, the empty one; there are 2 of length 1, 4 of length 2, and so on, up to ``2^{19}`` of length 19. Add them up and a pattern shows: ``1 + 2 = 3``, one less than 4; ``1 + 2 + 4 = 7``, one less than 8. Each length doubles the one before, so the total always stays one short of the next. Up to length 19, it comes to ``2^{20} - 1``: 1,048,575 descriptions.
 
 Each description prints at most one string. So at most 1,048,575 of the 16,777,216 strings can be compressed by more than 4 bits: fewer than one in 16.
 
@@ -464,9 +466,9 @@ end;
 
 # ╔═╡ c8f8369b-1fb2-4d98-8315-d61b8ae35537
 md"""
-So a typical string is like the coin flips: random, with no shorter description to find. A search for its best description has to try everything shorter than the string itself first, and that is why the search is expensive.
+---
 
-This notebook began by asking whether the best compressor can be found. Not exactly, since ``K`` is not computable. Not in time either: ``Kt`` is computable, but since most strings are random, its search grows exponentially with their length.
+This notebook began by asking whether the best compressor can be found. Not exactly, since ``K`` is not computable. Not cheaply either: ``Kt`` is computable, but since most strings are random, its search grows exponentially with their length. No faster way is known, though no one has proved there isn't one.
 
 Practical compressors live with this by narrowing the search. zstd looks only for back-references; a neural network looks only for what its weights can express, found by gradient descent rather than one program at a time. Both give up the guarantee of the shortest description to get *a* description, in time, and ``K`` remains the yardstick they are measured against.
 """
@@ -484,13 +486,13 @@ coin(n) = join(rand(Xoshiro(n), ('0', '1'), n))
 
 # ╔═╡ ad4216da-7792-4ae7-8bbc-7318a9387799
 # The sixteen coin flips are the ones from the introduction.
-TARGETS = ["0"^16, "01"^8, "0"^24, "0110100010111001", coin(20)]
+TARGETS = ["0"^16, "01"^8, "0"^24, "0110100010111001", coin(20)];
 
 # ╔═╡ e9fd5fb3-2a61-41ba-86bd-5ba50268fcc7
-k_table = [(; x, shortest(x; cap = CAP)...) for x in TARGETS]
+k_table = [(; x, shortest(x; cap = CAP)...) for x in TARGETS];
 
 # ╔═╡ 3043a622-07a7-4fc4-a9ab-504ec6d495df
-kt_table = [(; x, levin(x)...) for x in TARGETS]
+kt_table = [(; x, levin(x)...) for x in TARGETS];
 
 # ╔═╡ e997e6d3-2ba9-455a-8347-b30394e242fb
 costs = map(LENGTHS) do n
@@ -499,9 +501,10 @@ costs = map(LENGTHS) do n
 end;
 
 # ╔═╡ 552af09a-a1a1-4638-975e-475c1bf9b094
-contrast = [(; x, K = shortest(x; cap = CAP), Kt = levin(x)) for x in ["0"^24, "001"^8, coin(24)]]
+contrast = [(; x, K = shortest(x; cap = CAP), Kt = levin(x)) for x in ["0"^24, "001"^8, coin(24)]];
 
 # ╔═╡ 3ba9b3cf-f3f6-4cfc-8909-e4f70cbde016
+"A whole number, with commas between the thousands."
 commas(n::Integer) = replace(string(n), r"(?<=\d)(?=(\d{3})+$)" => ",")
 
 # ╔═╡ e2108ad6-af44-4f61-bb16-b2a7c6644024
@@ -522,6 +525,8 @@ let lengths = [1 + 3length(p) for (x, p) in simplest if length(x) == 24]
     $(join(("- `$x`, printed by `$p`" for (x, p) in rare), "\n"))
 
     Our machine finds so few because the only structure it can express is repetition. A richer machine would find more. None can find more than counting allows.
+    
+    So a typical string is like the coin flips: random, with no shorter description to find. A search for its best description has to try everything shorter than the string itself first, and that is why the search is expensive.           
     """)
 end
 
@@ -543,13 +548,13 @@ let per_instruction = length(PROGRAMS[9]) / length(PROGRAMS[8])
     programs_at(n) = last(costs).Kt * per_bit^(n - last(LENGTHS))
     years_at(n) = programs_at(n) / 1e9 / (365.25 * 24 * 3600)    # at a billion programs a second
     Markdown.parse("""
-    Both lines climb at the same rate. Each extra instruction multiplies the number of programs by about $(round(per_instruction; digits = 1)): six choices, less the ones whose brackets don't match. An instruction is three bits, so that is about ×$(round(per_bit; digits = 2)) per bit of string. The ``Kt`` search tries more programs at every length, because it reruns them in each phase and, with ``\\log_2 t`` in its score, reaches a little further. Its slope is the same.
+    Both lines climb at the same rate. Each extra instruction multiplies the number of programs by about $(round(per_instruction; digits = 1)): six choices, less the ones whose brackets don't match. An instruction is three bits, so that is a factor of about $(round(per_bit; digits = 2)) per bit of string. The ``Kt`` search tries more programs at every length, because it reruns them in each phase and, with ``\\log_2 t`` in its score, reaches a little further. Its slope is the same.
 
     Extend the line. A 64-bit coin flip would take Levin search about $(sci(programs_at(64))) programs: at a billion programs a second, $(duration(years_at(64))). A 128-bit one would take $(duration(years_at(128))), some $(commas(round(Int, round(years_at(128) / 13.8e9; sigdigits = 2)))) times the age of the universe.
 
     So what separates ``K`` from ``Kt`` is not the cost:
 
-    > **``K`` and ``Kt`` need the same exponential search. Only ``Kt``'s search ends.**
+    > **``K`` and ``Kt`` cost the same exponential search. Only ``Kt``'s search ends.**
 
     Why does it have to be this expensive?
     """)
@@ -588,7 +593,7 @@ end
 # ╔═╡ 04cd4ff9-a1ab-4965-b246-ad81b9ff7b11
 let zeros16 = k_table[1], flips = k_table[end], stingy = shortest(zeros16.x; cap = 10)
     Markdown.parse("""
-    The table looks like answers. It isn't, quite.
+    These look like answers. They aren't, quite.
 
     - **A cap can hide the answer.** `$(zeros16.description)` needs $(run_program(zeros16.description; cap = 10^6).steps) steps. With a cap of 10 it would have been set aside like `+[+]`, and the search would have settled for $(shown(stingy.description)), $(stingy.bits) bits. Nothing guarantees that $(commas(CAP)) steps is enough either.
     - **The literal is only what we found.** For the $(length(flips.x)) coin flips, no program beat the $(flips.bits)-bit literal. To call the literal *shortest*, we would have to rule out every shorter program, including the ones the cap set aside.
@@ -651,7 +656,7 @@ THEME = Theme(
             xtickcolor = VIZ.text2, ytickcolor = VIZ.text2, xticklabelcolor = VIZ.text2, yticklabelcolor = VIZ.text2,
             titlealign = :left, titlefont = :regular, titlesize = 14),
     Legend = (framevisible = false, backgroundcolor = VIZ.surface),
-)
+);
 
 # ╔═╡ 0e12e9c0-9fc0-4d2e-8f55-733161e149aa
 let sizes = (10^3, 10^5, 10^7), Ns = exp10.(range(0, 9; length = 200))
@@ -661,7 +666,7 @@ let sizes = (10^3, 10^5, 10^7), Ns = exp10.(range(0, 9; length = 200))
     with_theme(THEME) do
         fig = Figure(size = (760, 440))
         ax = Axis(fig[1, 1]; xscale = log10, yscale = log10, xlabel = "N", ylabel = "bits",
-                  title = "However long the hunt starts, N passes it")
+                  title = "Whatever c is, N passes the hunt")
         lines!(ax, Ns, Ns; color = orange, linewidth = 2, label = "N: the string has no description this short")
         for c in sizes
             lines!(ax, Ns, c .+ log2.(Ns); color = blue, linewidth = 2, label = "the hunt: c + log₂ N bits")
