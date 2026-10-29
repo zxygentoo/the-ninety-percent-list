@@ -12,12 +12,12 @@ Each item is worked through as a **Build**: the smallest thing to implement that
 
 [All notebooks](https://zxygentoo.github.io/the-ninety-percent-list/)
 
-Progress: **2 / 30** items built `██░░░░░░░░░░░░░░░░░░░░░░░░░░░░`
-
 | Item | Notebook | Status |
 |--:|:--|:-:|
 | 1 | [01 · An Observation on Generalization](https://zxygentoo.github.io/the-ninety-percent-list/01.An.Observation.on.Generalization.html) | ✅ |
 | 2 | [02 · Kolmogorov Complexity and Algorithmic Randomness](https://zxygentoo.github.io/the-ninety-percent-list/02.Kolmogorov.Complexity.and.Algorithmic.Randomness.html) | ✅ |
+
+Progress: **2 / 30** items built `██░░░░░░░░░░░░░░░░░░░░░░░░░░░░`
 
 ### Running a notebook
 
@@ -34,8 +34,6 @@ Progress: **2 / 30** items built `██░░░░░░░░░░░░░�
 Each notebook carries its own package environment, so its first run installs what it needs, which takes a few minutes. Downloaded data is cached in `notebooks/data/`, which git ignores.
 
 ## The list
-
-Thirty items in five sections. An item earns its slot by carrying a *why* you can't get elsewhere, or a phenomenon that still lacks an explanation. Being important or widely used is not enough.
 
 - `Ilya` marks items on the original 2019–20 list, as reconstructed (see [Provenance](#provenance)).
 - `implement` marks items whose point is building them in full.
