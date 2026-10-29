@@ -20,7 +20,7 @@ One list item at a time:
 1. **Read** the item, and research further if the material warrants it.
 2. **Design** the experiment or build.
 3. **Build, run, iterate** in a notebook, or first in a temporary script and then in the notebook.
-4. **Publish and update the docs:** run the export; in `README.md`, add the notebook to the table with its status, link it under its item, and update the progress.
+4. **Publish and update the docs:** run the export; in `README.md`, add the notebook to the table with its status and update the progress.
 
 ## Style
 
