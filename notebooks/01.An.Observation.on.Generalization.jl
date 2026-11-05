@@ -37,6 +37,9 @@ md"""
 - No [information theory](https://en.wikipedia.org/wiki/Information_theory): the notebook introduces what it uses.
 """
 
+# ╔═╡ 833a76f1-a7ef-45b3-9d11-6b92f1ea3120
+TableOfContents()
+
 # ╔═╡ 2c83d185-422a-5af7-9fce-7c99ce734229
 md"""
 ## The puzzle
@@ -104,7 +107,7 @@ C(x) \approx \sum_t -\log_2 p(x_t \mid x_{<t})
 
 The match is close: an ideal arithmetic coder overshoots the sum by less than two bits for the whole file, not per symbol.
 
-That sum is the [cross-entropy](https://en.wikipedia.org/wiki/Cross-entropy) loss a language model is trained to minimise, counted in bits. Training a model to predict the next token *is* training a compressor, and its loss is the size of the file it would write.
+Divide that sum by the number of symbols, and you have the loss a language model is trained to minimise, counted in bits: machine learning's [cross-entropy](https://en.wikipedia.org/wiki/Cross-entropy) loss. (Strictly, cross-entropy averages over every text the source could produce; the loss estimates it from the one text at hand.) So training a model to predict the next token *is* training a compressor, and its loss is the size of the file it would write, per symbol.
 
 The equivalence runs the other way too. Any compressor implies predictions. A continuation that compresses to ``k`` fewer bits is, in the compressor's eyes, ``2^k`` times more likely: 10 bits shorter, about a thousand times likelier. zstd never states a probability, but each back-reference is a bet that the text is about to repeat itself, and a small file is a run of bets that paid off.
 
@@ -162,9 +165,6 @@ Three predictions follow, and the rest of this notebook tests each one:
 2. **Related data helps, and more of it helps more.** The saving grows with what ``X`` and ``Y`` have in common, and with how much ``X`` there is.
 3. **A better compressor finds more.** Given the same ``X``, a compressor closer to ``K`` extracts more of what ``X`` shares with ``Y``.
 """
-
-# ╔═╡ 833a76f1-a7ef-45b3-9d11-6b92f1ea3120
-TableOfContents()
 
 # ╔═╡ 1d77adbb-cc37-53f6-b0f3-635453e64314
 begin
@@ -425,7 +425,7 @@ md"""
 Now put a language model in zstd's place. Because prediction is compression:
 
 - a model that predicts the next token, driving an arithmetic coder, is a compressor;
-- its cross-entropy loss, counted in bits, is the size of that file, so the number training drives down *is* a compressed size;
+- its loss, times the number of tokens, is the size of that file, so the number training drives down *is* a compressed size;
 - pretrain it on ``X``, and its loss on ``Y`` is ``C(Y \mid X)``: this notebook's experiment, with a far better ``C``.
 
 Such models compress well even far from their training data. In [*Language Modeling Is Compression*](https://arxiv.org/abs/2309.10668) (Delétang et al., 2023), Chinchilla 70B, trained mostly on text, beats compressors built for images and audio:
