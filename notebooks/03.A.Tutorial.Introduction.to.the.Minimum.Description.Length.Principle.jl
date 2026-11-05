@@ -16,17 +16,19 @@ md"""
 
 *We can't find the best description. What if we settle for a smaller machine?*
 
-[Notebook 02](https://zxygentoo.github.io/the-ninety-percent-list/02.Kolmogorov.Complexity.and.Algorithmic.Randomness.html) ended on a deal. The best compressor, ``K``, can't be computed, so practical compressors give up the guarantee of the shortest description to get *a* description, in time.
-
-There is more than one way to strike that deal. ``Kt`` keeps every program and bounds the time. zstd fixes one scheme and makes no promise about it. A neural network searches a rich family by gradient descent. The *Minimum Description Length* principle, MDL, strikes it this way: shrink the language until the best description in it can be computed exactly.
-
-Peter Grünwald's [tutorial](https://arxiv.org/abs/math/0406077) is our guide, and the section numbers below refer to it.
-
 **Prerequisites**
 
 - [Notebook 02](https://zxygentoo.github.io/the-ninety-percent-list/02.Kolmogorov.Complexity.and.Algorithmic.Randomness.html), or the idea that ``K(x)`` is the length of the shortest program that prints ``x``.
 - Basic probability theory.
 - Information measured in bits, ``-\log_2 P(x)``.
+
+---
+
+[Notebook 02](https://zxygentoo.github.io/the-ninety-percent-list/02.Kolmogorov.Complexity.and.Algorithmic.Randomness.html) ended on a deal. The best compressor, ``K``, can't be computed, so practical compressors give up the guarantee of the shortest description to get *a* description, in time.
+
+There is more than one way to strike that deal. ``Kt`` keeps every program and bounds the time. zstd fixes one scheme and makes no promise about it. A neural network searches a rich family by gradient descent. The *Minimum Description Length* principle, MDL, strikes it this way: shrink the language until the best description in it can be computed exactly.
+
+Peter Grünwald's [tutorial](https://arxiv.org/abs/math/0406077) is our guide, and the section numbers below refer to it.
 """
 
 # ╔═╡ b37ccf49-8d6b-4838-ba75-872c194c3df2

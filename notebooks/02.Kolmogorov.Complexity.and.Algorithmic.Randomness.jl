@@ -16,13 +16,15 @@ md"""
 
 *We know what the best compressor is. Can we find it?*
 
-[Notebook 01](https://zxygentoo.github.io/the-ninety-percent-list/01.An.Observation.on.Generalization.html) named the best compressor there is: ``K(x)``, the length of the shortest program that prints ``x``. This notebook asks the obvious next question. Given a string, can we find its shortest program?
-
 **Prerequisites**
 
 - [Notebook 01](https://zxygentoo.github.io/the-ninety-percent-list/01.An.Observation.on.Generalization.html), or the idea that a compressed file is a description of the original.
 - What a program, a loop and a counter are.
 - Logarithms in base 2.
+
+---
+
+[Notebook 01](https://zxygentoo.github.io/the-ninety-percent-list/01.An.Observation.on.Generalization.html) named the best compressor there is: ``K(x)``, the length of the shortest program that prints ``x``. This notebook asks the obvious next question. Given a string, can we find its shortest program?
 """
 
 # ╔═╡ 1a06f904-cebb-43a2-8bd3-dcea80cf58ba
