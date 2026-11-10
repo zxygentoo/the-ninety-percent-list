@@ -4,7 +4,7 @@
 using Markdown
 using InteractiveUtils
 
-# ╔═╡ dfe5ed49-06f1-5315-9b81-f1599d064b8c
+# ╔═╡ 65cc8b96-25fe-5676-aac0-d4715c84314e
 begin
     using CairoMakie, PlutoUI
     using Printf, Random, Statistics
@@ -12,7 +12,7 @@ begin
     import Lux, Optimisers, Zygote
 end
 
-# ╔═╡ c2648369-7931-5a78-afb0-db9249fc9bda
+# ╔═╡ b3dce1ff-f7f7-5a3b-97e3-a19f8dcaca7a
 md"""
 # Keeping Neural Networks Simple by Minimizing the Description Length of the Weights
 
@@ -42,45 +42,35 @@ We keep the paper's basic approach but update its engineering:
 Section numbers refer to the paper.
 """
 
-# ╔═╡ 135ef253-1443-5fe2-b2a3-2101e64f3fba
+# ╔═╡ ca4d9ebf-335b-573f-8a78-32072021bcc1
 TableOfContents()
 
-# ╔═╡ 445d8293-b923-5657-9c21-1d7df0914065
+# ╔═╡ 0e7627a5-f61c-5b54-a1ad-df392620ffb1
 md"""
-## Bits in a knob
+## COMP can't really work for neural nets
 
-Notebook 03's machines describe a string in two parts: a setting of the knobs, and a codeword for whatever that setting can't predict. Notebook 03 priced the knobs indirectly, by how far choosing them in hindsight overspends the budget of 1. There is a more direct way to count them.
+Notebook 03 priced a model by its fit plus its COMP. COMP looks past the data at hand to every dataset the model could have been handed. It gives each one the model's best fit to it, and adds up the probabilities those fits assign: a total above 1, since every dataset got to pick its own fit. COMP is that overspend, in bits.
 
-Give the knobs a *prior*, ``P``: before any string arrives, every setting is equally likely. Once a string arrives, some settings fit it far better than others, and the *posterior*, ``Q``, gathers around them. The codelength then splits in two:
+A neural network is a model too. What would COMP say about one?
 
-!!! info "Misfit plus knob bits"
-    ```math
-    -\log_2 P(x) \;=\; \mathbb{E}_{\theta \sim Q}\big[-\log_2 P(x \mid \theta)\big] \;+\; \mathrm{KL}(Q \,\|\, P)
-    ```
+### Too many datasets
 
-    - ``P(x)``, on the left, is the string's probability with the knobs averaged over the prior, so the left side is the length of a real code;
-    - the first term on the right is the *misfit*: the codelength of ``x`` with the knobs drawn from ``Q``, on average;
-    - the second is the *Kullback–Leibler divergence*, ``\mathrm{KL}(Q \,\|\, P) = \mathbb{E}_{Q}\big[\log_2 Q(\theta) / P(\theta)\big]``, which measures in bits how much narrower ``Q`` is than ``P``. If ``Q`` is spread evenly over a fraction ``w`` of the prior's range, it is ``\log_2(1/w)``.
-
-    We call the second term the *bits in the knobs*: what it costs to say where the data put them.
+For strings of ``n`` bits, there are ``2^n`` datasets, and each needs its own best fit. Here is Bernoulli's COMP, summed the long way:
 """
 
-# ╔═╡ 954a118b-a672-401b-b54b-ac576d288ca3
-md"""
-### Why not COMP?
-
-Notebook 03 priced a model by its COMP: a sum over every dataset the model could have been handed, each with its own best fit. For strings of ``n`` bits, that is ``2^n`` fits. Here is Bernoulli's COMP, summed the long way:
-"""
-
-# ╔═╡ 8ea8e777-cb1f-4fc6-aef2-4ffad017cada
+# ╔═╡ 73b6b9b6-1ba8-5d35-a029-3329024fbf64
 "The best fit, in bits, of `total` coin flips that landed 1 `ones` times: the bias set to `ones / total`."
-best_fit(ones, total) = sum(c -> c == 0 ? 0.0 : -c * log2(c / total), (ones, total - ones))
+bernoulli_fit(ones, total) = sum(
+	c -> c == 0 ? 0.0 : -c * log2(c / total), (ones, total - ones)
+)
 
-# ╔═╡ 73671fe1-beb4-4072-beb5-4357979693a0
+# ╔═╡ 32501cfd-cdf6-5491-98be-191229948e55
 "Bernoulli's COMP by brute force: every string of `n` bits, as the integer it spells, each with its own best fit."
-bernoulli_comp(n) = log2(sum(x -> exp2(-best_fit(count_ones(x), n)), 0:2^n-1))
+bernoulli_comp(n) = log2(
+	sum(x -> exp2(-bernoulli_fit(count_ones(x), n)), 0:2^n-1)
+)
 
-# ╔═╡ 62028fa1-9edb-4af9-9983-309f693e1032
+# ╔═╡ b14d1afc-72b0-5118-bdab-1944df3afb78
 # Each row sums 2ⁿ strings; the times are this machine's.
 COMP_TIMINGS = begin
     bernoulli_comp(4)    # compile first, so the times are of the sum alone
@@ -90,175 +80,56 @@ COMP_TIMINGS = begin
     end
 end;
 
-# ╔═╡ 04902c85-4a28-5dce-9b89-1104fab650e2
+# ╔═╡ 2d3bba55-ba86-57a8-a905-659e57b6bb77
 md"""
-## The sender and the receiver
+### A network with more weights than cases
 
-The paper sets up MDL for a network as a game between two people (§2).
+The paper's one experiment (§9) predicts how well peptide molecules work: 128 inputs, only 105 training cases, and a network with 521 weights that "overfits the 105 training cases very badly" without a penalty.
 
-The *sender* sees a set of training cases, each an input and its target. The *receiver* sees only the inputs. They have agreed on the shape of a network in advance, and the sender wants the receiver to end up with every target.
-
-So the sender trains the network and sends its weights. Then, for each case, the sender sends the *misfit*: the target minus the network's output. The receiver runs the network on each input, adds the misfit, and has the target.
-
-The bill is the bits for the weights plus the bits for the misfits. A precise network leaves small misfits, which are cheap to send, but its weights may cost a lot. A crude one is cheap to send, and leaves large misfits. MDL picks the network that makes the sum smallest.
-
-### Squared error is a codelength
-
-A real number takes infinitely many bits, so the targets are sent to some fine tolerance, ``t``. Code a misfit ``r`` with a Gaussian of width ``s``, and it costs (§3)
+We design our task to have the same shape, few cases and many inputs, but a truth we can draw. The target depends on two inputs, ``x_1`` and ``x_2``, through two ridges crossing at right angles:
 
 ```math
--\log_2\!\left(t \cdot \frac{e^{-r^2/2s^2}}{\sqrt{2\pi}\,s}\right) \;=\; \frac{r^2}{2 s^2}\log_2 e \;+\; \log_2 \frac{\sqrt{2\pi}\, s}{t} \quad \text{bits}.
+f(x_1, x_2) = \tanh(2x_1 + x_2) - \tanh(x_1 - 2x_2),
 ```
 
-The first term is the squared error. With ``s`` set to the root-mean-square misfit, all ``N`` misfits together cost ``\tfrac{N}{2} \log_2(2\pi e \cdot \mathrm{mse})`` bits, plus ``N \log_2(1/t)``.
-
-That last term is the same for every network that sends these targets, so we leave it out from here on. Our counts are differences, which is why a good fit can come in under 0 bits.
-
-The code works in nats, the paper's unit (1 nat is ``\log_2 e \approx 1.44`` bits), and converts to bits for display:
+plus noise with a standard deviation of 0.1. Twenty more inputs are distractors: random numbers the target ignores.
 """
 
-# ╔═╡ 573b535f-139a-5bb6-ab43-30c1b5e4337d
-"The misfits `r`, in nats, coded with a Gaussian of width `s`, leaving out the tolerance term."
-misfit(r, s) = sum(abs2, r) / (2s^2) + length(r) * (log(s) + log(2π) / 2)
-
-# ╔═╡ 99666431-9067-5717-8270-e855cad7e227
-"The same, with `s` set to the root-mean-square misfit: `n` misfits of mean square `mse`."
-optimal_misfit(mse, n) = n / 2 * log(2π * ℯ * mse)
-
-# ╔═╡ 80414ab6-410c-5613-9467-c0f35c9ef968
-bits(nats) = nats / log(2)
-
-# ╔═╡ 132385a2-9235-5ea3-baef-e7a6827ae7b9
-md"""
-### Weight decay is a code too
-
-Send the weights the same way, with a Gaussian of width ``\sigma_w`` centred on 0, and they cost ``\sum w^2 / 2\sigma_w^2`` nats, plus terms that don't depend on the weights (§4). Add the two parts, and the bill is the squared error plus a penalty on the squared weights: *weight decay*, with a strength set by the two widths, ``\lambda = s^2 / \sigma_w^2``.
-
-So weight decay was a description length all along. The paper reads its success as "a vindication of this crude MDL approach".
-
-Weight decay charges for a weight's value. Does it charge for how precisely the weight is sent?
-"""
-
-# ╔═╡ 86b2edb7-6a2c-5ab5-b6b6-605a2205c73e
-md"""
-## Height and width
-
-Look closely at what one weight costs. A value ``w``, sent to tolerance ``t`` under a prior ``P``, falls in a narrow bin, and the bin's probability is about the prior's height there times the bin's width:
-"""
-
-# ╔═╡ 7355c21d-72c4-59d4-bec8-56feab68595a
-md"""
-So the cost has two parts: ``-\log_2 P(w)`` for the height, and ``-\log_2 t`` for the width. Weight decay charges for the first and fixes the second. Every weight is sent to the same tolerance, fine enough for the most sensitive one.
-
-That wastes bits wherever a weight could be sent coarsely. A weight that can move by 0.5 without changing the network's output needs only a coarse bin; a weight that matters to the fourth decimal needs a fine one. The paper calls ignoring the difference "a terrible waste of bits" (§4).
-
-How can each weight choose its own precision?
-"""
-
-# ╔═╡ 99102c8a-1313-54cd-a6c0-7037fa16b1cb
-md"""
-## Noisy weights
-
-Make each weight a small cloud instead of a point: a Gaussian, ``Q = \mathcal{N}(\mu, \sigma^2)`` (§5). Its mean ``\mu`` is where the weight sits, and its width ``\sigma`` says how precisely. A wide cloud is a weight that doesn't need to be exact. Both are learned.
-
-How do you send a cloud? The sender picks one point from it at random, ``w \sim Q``, and sends that point to a fine tolerance under the prior. That costs ``-\log_2 P(w) - \log_2 t`` bits, and with a fine ``t`` it is a lot.
-
-### Bits back
-
-Then comes a refund (§5.2). Once the receiver has the weights and the misfits, they have the targets, so they can rerun the sender's training and arrive at the same cloud ``Q``. Knowing the cloud and the point, they can work out the random bits the sender used to pick the point.
-
-The sender didn't need real coin flips for that. They could use the first bits of some other message they owe the receiver anyway, and the receiver reads that message back off the point. Those bits were delivered, so they come off the bill: ``-\log_2 Q(w) - \log_2 t`` of them.
-
-> Think of an address. The prior is a city, and the cloud is the district where the weight must land. Any house in the district will do, so the house number can spell out part of another message. What the sender really pays for is naming the district: about ``\log_2`` of the city's size over the district's.
-
-Averaged over the pick, the cost minus the refund is
-
-```math
-\mathbb{E}_{w \sim Q}\left[\log_2 \frac{Q(w)}{P(w)}\right] = \mathrm{KL}(Q \,\|\, P),
-```
-
-the same divergence that counted the bits in a knob. The tolerance ``t`` has cancelled. Precision is no longer a fixed tax; each weight chooses its own.
-
-For a Gaussian cloud and a Gaussian prior ``\mathcal{N}(0, \sigma_P^2)``, the divergence has a closed form (eq. 9), in nats:
-
-```math
-\mathrm{KL}(Q \,\|\, P) \;=\; \log\frac{\sigma_P}{\sigma} \;+\; \frac{\sigma^2 + \mu^2}{2\sigma_P^2} \;-\; \frac12 .
-```
-
-The ``\mu^2`` term is weight decay again. The ``\log(\sigma_P / \sigma)`` term is new, and it charges for precision. A cloud as wide as the prior costs nothing for it, and each halving of its width costs one more bit.
-"""
-
-# ╔═╡ 1fc2051d-6347-5131-a5fc-ab549861724b
+# ╔═╡ 0e2eeebd-951a-5eea-b995-04fd66b688dd
 begin
-    "KL(Q ‖ P) in nats, for a cloud Q = N(μ, σ²) and a prior P = N(m, σₚ²); `m` is 0 unless given."
-    kl(μ, σ, m, σₚ) = log(σₚ / σ) + (σ^2 + (μ - m)^2) / (2σₚ^2) - 1 / 2
-    kl(μ, σ, σₚ) = kl(μ, σ, 0, σₚ)
+    INPUTS = 22      # x₁, x₂, and 20 distractors
+    HIDDEN = 8
+    NOISE = 0.1
+end;
+
+# ╔═╡ 883df49d-a6a1-5194-b5e5-90c916d52d50
+"Two ridges crossing at right angles: four plateaus."
+truth(x₁, x₂) = tanh(2x₁ + x₂) - tanh(x₁ - 2x₂)
+
+# ╔═╡ e6b75c28-b9ba-5ee8-a231-a6fca1845bef
+"`n` cases: standard Gaussian inputs, and the truth of the first two plus noise as the target."
+function dataset(rng, n)
+    x = randn(rng, INPUTS, n)
+    (; x, y = reshape(truth.(x[1, :], x[2, :]), 1, n) .+ NOISE .* randn(rng, 1, n))
 end
 
-# ╔═╡ cab900cd-0c95-5cb6-b496-5972e972e948
-md"""
-A wide cloud is cheap, but its noise reaches the network's output. Where is the balance?
-"""
+# ╔═╡ 0a7ef374-adca-5b9b-8159-1f85b9197338
+TRAIN, TEST = dataset(Xoshiro(4), 100), dataset(Xoshiro(5), 2000);
 
-# ╔═╡ 1da8e658-e978-54b6-bde9-992485fbc7e6
-md"""
-## The loss
+# ╔═╡ ce3d4e6b-baa9-4627-8cb7-7d262ff86f52
+md"""The network has one hidden layer of $HIDDEN tanh units and a linear output."""
 
-Put the two parts of the bill together. With a cloud of weights, the cost of sending the targets is
+# ╔═╡ f0cc85b0-16f3-5503-b720-3983d7094b28
+MODEL = Lux.Chain(
+	Lux.Dense(INPUTS => HIDDEN, tanh),
+	Lux.Dense(HIDDEN => 1)
+)
 
-```math
-\underbrace{\mathbb{E}_{w \sim Q}\big[\mathrm{misfit}(w)\big]}_{\text{error}} \;+\; \underbrace{\mathrm{KL}(Q \,\|\, P)}_{\text{weights}} ,
-```
+# ╔═╡ fcb787e3-5f33-57a4-a550-fd6e5f3ddf17
+"A fresh set of weights, as one flat vector with named parts: `layer_1.weight`, `layer_1.bias`, and so on."
+weights(rng) = ComponentArray(Lux.f64(first(Lux.setup(rng, MODEL))))
 
-and this is the loss the network is trained on.
-
-The two terms pull against each other. Widening a weight's cloud shrinks its KL, but the noise reaches the output. On each case, the expected squared error is the systematic error plus the variance the noise adds (eq. 12):
-
-```math
-\mathbb{E}\big[(d - y)^2\big] = (d - \bar y)^2 + \mathrm{Var}(y) .
-```
-
-So a weight can afford to be wide only where the output doesn't care about it.
-
-The paper computed the expectation exactly, with tables for pushing a Gaussian through each hidden unit, which only works for one hidden layer and linear outputs (§5.3). Today we sample instead. Draw ``\varepsilon`` from a standard Gaussian and set ``w = \mu + \sigma \varepsilon``, and the gradient of what that sample costs flows back to ``\mu`` and ``\sigma``. This is the *reparameterization trick*. A few samples per step are enough.
-
-The loss has modern names: it is the negative *evidence lower bound* (ELBO), and training a network on it is *Bayes by Backprop* (Blundell et al., 2015). It is this paper, with sampled gradients.
-
-In code, a cloud is one flat vector `θ` with named parts: the means `θ.μ`, the log-widths `θ.ρ`, the log of the misfit code's width, and the prior's own parameters. The network it feeds is defined with the task, in the next section.
-"""
-
-# ╔═╡ 7389031b-6d3c-5518-9d1a-3b219ab09d7a
-# Lux names the layers of a Chain `layer_1`, `layer_2`, …
-LAYERS = (:layer_1, :layer_2)
-
-# ╔═╡ 7cd2b515-5909-5386-bf7f-2a57d533348d
-widths(θ) = exp.(θ.ρ)
-
-# ╔═╡ eaf5a06f-42e6-5b36-9fa0-d6e7f23f3bc7
-"One draw of the weights from the cloud θ, given standard Gaussian noise ε."
-sample(θ, ε) = θ.μ .+ widths(θ) .* ε
-
-# ╔═╡ e5d3a282-4dee-513d-aec8-8116ea1e1155
-"Standard Gaussian noise, shaped like the weights μ."
-noise_like(rng, μ) = ComponentArray(randn(rng, length(μ)), getaxes(μ))
-
-# ╔═╡ 3a7aa754-ec7f-54d3-acdd-9f6a48933a86
-"One Gaussian prior per layer, N(0, σₚ²), stored as log σₚ."
-gaussian_prior() = ComponentArray(layer_1 = 0.0, layer_2 = 0.0)
-
-# ╔═╡ 88975436-c175-5335-943e-956afea92d61
-md"""
-Three more things are learned along with the clouds: the width ``s`` of the misfit code, and the width of the prior for each layer, "letting the data determine the prior" (§6). These are only a few numbers, and the paper ignores what they cost to send. So do we.
-
-Two habits come from the paper's experiment (§9):
-
-- **A warm-up.** Early in training, the cheapest way to cut the loss is to give up on the weights entirely, and training can get stuck there. So the KL term starts at 0.05 of its weight and rises to 1 over the first few thousand steps. We also hold the prior still during the warm-up, so that it doesn't shrink to fit weights that haven't grown yet.
-- **Five starts.** Train from five random starts, and keep the one with the shortest description. That is MDL's own rule, applied once more, and it never looks at test data.
-
-Here is the training loop, and the noisy net:
-"""
-
-# ╔═╡ 324c62a1-7687-53e3-90dc-4966ca29c443
+# ╔═╡ 71c1f97f-0824-5767-8a69-03e6955c0682
 "Minimize `loss(θ, t)` over `θ` with Adam, `t` being the step; the learning rate drops tenfold for the last `cooldown` steps."
 function train(loss, θ; steps, lr = 1e-2, cooldown = 0)
     opt = Optimisers.setup(Optimisers.Adam(lr), θ)
@@ -270,215 +141,451 @@ function train(loss, θ; steps, lr = 1e-2, cooldown = 0)
     θ
 end
 
-# ╔═╡ e22a7e39-e2a8-5674-8e04-ba0d0ae65b24
+# ╔═╡ 5e8b963b-a5d0-536a-b53f-968e33d67bae
+md"""
+### It fits anything
+
+Train the network the plain way first: squared error alone, no penalty, minimized with [Adam](https://arxiv.org/abs/1412.6980).
+"""
+
+# ╔═╡ 837af198-c6af-58f0-be18-50d0030689c8
+md"""
+We measure error as the paper does (eq. 27): squared error on the test set, relative to always guessing the mean. A score of 1 is no better than the mean. A score of 0 is out of reach: the test targets carry the same noise as the training targets, and no predictor can foresee it. Even the truth misses each target by its noise, about 0.1² in squared error against the targets' variance of about 1.3, so it scores about 0.007. That is the floor.
+"""
+
+# ╔═╡ 5a4add4f-3828-5aca-b76c-3960b85c880d
+relative_error(ŷ, data) = sum(abs2, ŷ .- data.y) / sum(abs2, data.y .- mean(data.y))
+
+# ╔═╡ 92788641-8d09-5fd1-b9c2-4c7e1c087ec3
+# The truth's own relative test error: the noise alone.
+FLOOR = relative_error(reshape(truth.(TEST.x[1, :], TEST.x[2, :]), 1, :), TEST)
+
+# ╔═╡ 74a4508b-259f-541d-ba00-7aff49ee6f0f
+md"""
+Here is what the plain network learned, drawn on the plane. Each pixel gets fresh random values for the 20 distractors, as a test case would:
+"""
+
+# ╔═╡ eccb9cb7-c861-5a93-a115-86f10262b9ec
+md"""
+## The weights and the misfits
+
+The paper sets the problem up as a game between two people (§2).
+
+The *sender* sees a set of training cases, each an input and its target. The *receiver* sees only the inputs. They have agreed on the shape of a network in advance, and the sender wants the receiver to end up with every target.
+
+So the sender trains the network and sends its weights. Then, for each case, the sender sends the *misfit*: the target minus the network's output. The receiver runs the network on each input, adds the misfit, and has the target.
+
+The bill has two parts, the bits for the weights and the bits for the misfits, and they pull against each other. A network that fits closely leaves small misfits, which are cheap to send, but its weights may cost a lot. A crude network is cheap to send, and leaves large misfits. MDL picks the network that makes the sum smallest.
+
+### Squared error is a codelength
+
+A real number takes infinitely many bits, so it can only be sent to some tolerance, ``t``: the receiver learns which bin of width ``t`` it falls in. Under a distribution ``P``, that bin's probability is about the height of ``P`` there, times the bin's width:
+"""
+
+# ╔═╡ b05932cc-c7d9-5410-b7f2-b053cfeb4326
+md"""
+The bin's area, ``t\,P(x)``, is the probability of sending ``x``, so sending it costs
+
+```math
+-\log_2\big(t\,P(x)\big) \;=\; -\log_2 P(x) \;+\; \log_2\frac{1}{t} \quad \text{bits}.
+```
+
+The first term depends on where ``x`` falls. The second, the *tolerance term*, is the same for every value, and grows as the tolerance gets finer.
+
+Now send a misfit ``r`` this way, with a Gaussian of width ``s`` as ``P`` (§3):
+
+```math
+P(r) = \frac{1}{\sqrt{2\pi}\,s}\, e^{-r^2/2s^2} .
+```
+
+Plug it in, and the cost splits into the squared error and two terms that don't depend on ``r``:
+
+```math
+-\log_2\big(t\,P(r)\big) \;=\; \frac{r^2}{2s^2}\log_2 e \;+\; \log_2\!\big(\sqrt{2\pi}\,s\big) \;+\; \log_2\frac{1}{t} .
+```
+
+Add up all ``N`` misfits, ``r_1`` to ``r_N``:
+
+```math
+\frac{\log_2 e}{2s^2}\sum_{c=1}^{N} r_c^2 \;+\; N\log_2\!\big(\sqrt{2\pi}\,s\big) \;+\; N\log_2\frac{1}{t} .
+```
+
+The sender is free to choose ``s``, and the two terms with ``s`` in them pull against each other. A narrow Gaussian makes the squared error expensive; a wide one spreads its probability thin, and every misfit pays for it. The best width is where the cost stops falling. Drop the terms without ``s``, and use ``\tfrac{d}{ds}\log_2 s = \log_2 e / s``:
+
+```math
+\frac{d}{ds}\left[\frac{\log_2 e}{2s^2}\sum_c r_c^2 + N\log_2 s\right] = \log_2 e\left(\frac{N}{s} - \frac{1}{s^3}\sum_c r_c^2\right) = 0 .
+```
+
+Multiply through by ``s^3 / \log_2 e`` and solve for ``s^2``:
+
+```math
+s^2 = \frac{1}{N}\sum_c r_c^2 = \mathrm{mse} .
+```
+
+So the best width is the root-mean-square misfit. Put it back, and the first term becomes ``\tfrac{N}{2}\log_2 e`` and the second ``\tfrac{N}{2}\log_2(2\pi\cdot\mathrm{mse})``. The total is then
+
+```math
+\frac{N}{2}\log_2\big(2\pi e \cdot \mathrm{mse}\big) \;+\; N\log_2\frac{1}{t} \quad \text{bits}.
+```
+
+Only the mean squared error depends on the network. Halve the misfits, and each one costs a bit less.
+"""
+
+# ╔═╡ 74aab869-7574-5319-9f4a-4d2db701db61
+"The misfits `r`, in nats, coded with a Gaussian of width `s`, leaving out the tolerance term."
+misfit_cost(r, s) = sum(abs2, r) / (2s^2) + length(r) * (log(s) + log(2π) / 2)
+
+# ╔═╡ 2456446b-4992-5de2-b992-547ad8a1f182
+"The same, with `s` set to the root-mean-square misfit: `n` misfits of mean square `mse`."
+best_misfit_cost(mse, n) = n / 2 * log(2π * ℯ * mse)
+
+# ╔═╡ d4d41340-f72a-59de-953f-566e994be2e4
+md"""
+The tolerance term is the same for every network that sends these targets, so it cancels whenever two codes are compared. We compare every code with the simplest one, *no network*: the sender codes the targets themselves, with one Gaussian at their own mean and spread.
+"""
+
+# ╔═╡ 5595ab9e-5cb7-55d0-a5fc-78ce8b192ad9
+md"""
+### Weight decay is a code too
+
+*Weight decay* was the standard remedy for an overfitting network, and it is still in use. Add a penalty on the squared weights to the training loss, ``\lambda \sum w^2``. Its gradient, ``2\lambda w``, shrinks every weight by a small fixed fraction at every step, so a weight decays toward 0 unless the data keep pushing it back. Small weights make a smooth network: a tanh unit fed small inputs stays in its gentle, nearly linear middle, and can't bend to chase every training case. The strength ``\lambda`` is a knob, usually tuned by trying values on held-out data. The paper cites Hinton's own earlier work for it (Hinton, 1987), and it is the method the paper sets out to beat.
+
+The paper's first move is to show that weight decay is already MDL (§4). Send the weights the same way as the misfits, with a Gaussian of width ``\sigma_w`` centred on 0, and they cost ``\tfrac{\log_2 e}{2\sigma_w^2}\sum w^2`` bits, plus terms that don't depend on the weights. Add the two parts, and the bill is the summed squared error plus a penalty on the squared weights: weight decay, with its strength set by the two widths, ``\lambda = s^2 / \sigma_w^2``.
+
+So weight decay was a description length all along, and its knob is a ratio of two code widths. The paper reads weight decay's success as "a vindication of this crude MDL approach". What makes it crude?
+"""
+
+# ╔═╡ 920e0d51-2a08-5c5c-b6f2-b55bb9e7c2a3
+md"""
+### What weight decay leaves out
+
+Go back to the bin. A weight ``w``, sent under a prior ``P``, costs ``-\log_2 P(w)`` for the height and ``\log_2(1/t)`` for the width. Weight decay charges for the first and fixes the second: every weight is sent to the same tolerance, fine enough for the most sensitive one.
+
+That wastes bits wherever a weight could be sent coarsely. A weight that can move by 0.5 without changing the network's output needs only a coarse bin; a weight that matters to the fourth decimal needs a fine one. The paper calls ignoring the difference "a terrible waste of bits" (§4).
+
+How can each weight choose its own precision?
+"""
+
+# ╔═╡ 4f2d3cd5-aa6a-55c2-b701-d6eb03f48907
+md"""
+## Expected squared error plus KL
+
+Make each weight a small cloud instead of a point: a Gaussian, ``Q = \mathcal{N}(\mu, \sigma^2)`` (§5). Its mean ``\mu`` is where the weight sits, and its width ``\sigma`` says how precisely. A wide cloud is a weight that doesn't need to be exact. Both are learned.
+
+### Bits back
+
+How do you send a cloud? The sender picks one point from it at random, ``w \sim Q``, and sends that point under the prior, to a fine tolerance. That is the bin from before, with the prior as its distribution:
+
+```math
+\text{cost} = -\log_2\big(t\,P(w)\big) \quad \text{bits},
+```
+
+and with a fine ``t`` it is a lot.
+
+Then comes a refund (§5.2). Once the receiver has the weights and the misfits, they have the targets, so they can rerun the sender's training and arrive at the same cloud ``Q``. Knowing the cloud and the point, they can work out the random bits the sender used to pick the point. The sender didn't need real coin flips for that. They could use the first bits of some other message they owe the receiver anyway, and the receiver reads that message back off the point. Those bits were delivered, so they come off the bill. Picking a bin of width ``t`` from ``Q`` takes
+
+```math
+\text{refund} = -\log_2\big(t\,Q(w)\big) \quad \text{bits}.
+```
+
+What one pick really costs is the difference:
+
+```math
+\text{cost} - \text{refund} \;=\; -\log_2\big(t\,P(w)\big) + \log_2\big(t\,Q(w)\big) \;=\; \log_2\frac{Q(w)}{P(w)} .
+```
+
+The tolerance cancels. A finer ``t`` makes the cost and the refund grow together, so precision is no longer a fixed tax: each weight chooses its own, through the width of its cloud. What's left depends on which point was picked, so average it over the pick:
+
+```math
+\mathbb{E}_{w \sim Q}\left[\log_2 \frac{Q(w)}{P(w)}\right] = \mathrm{KL}(Q \,\|\, P),
+```
+
+the *Kullback–Leibler divergence*, KL for short. This is the information in a weight, the term the paper adds to the loss.
+
+> Think of an address. The prior is a city, and the cloud is the district where the weight must land. Any house in the district will do, so the house number can spell out part of another message. What the sender really pays for is naming the district: about ``\log_2`` of the city's size over the district's.
+
+For a Gaussian cloud and a Gaussian prior ``\mathcal{N}(0, \sigma_P^2)``, the divergence has a closed form (eq. 9). The paper writes it in *nats*, the unit of natural logarithms (1 nat is ``\log_2 e \approx 1.44`` bits), and so does our code:
+
+```math
+\mathrm{KL}(Q \,\|\, P) \;=\; \log\frac{\sigma_P}{\sigma} \;+\; \frac{\sigma^2 + \mu^2}{2\sigma_P^2} \;-\; \frac12 .
+```
+
+The ``\mu^2`` term is weight decay again. The ``\log(\sigma_P / \sigma)`` term is new, and it charges for precision. A cloud as wide as the prior costs nothing for it, and each halving of its width costs one more bit.
+
+Notice what the precision is measured against: the prior. A weight's bits count how much the data narrows it *relative to the prior*, so a cloud that looks like the prior, centred where the prior is and about as wide, is nearly free, however narrow both are.
+"""
+
+# ╔═╡ 9a217e44-1307-51a8-97b1-2473236dfb1d
+"KL(Q ‖ P) in nats, for a cloud Q = N(μ, σ²) and a prior P = N(0, σₚ²): eq. 9."
+kl(μ, σ, σₚ) = log(σₚ / σ) + (σ^2 + μ^2) / (2σₚ^2) - 1 / 2
+
+# ╔═╡ 34ac9ced-0eac-5cd2-b82a-6ea260a10ae7
+md"""
+### The misfits, with noisy weights
+
+The receiver runs the network with the weights it was sent, a random draw from the clouds. So the outputs are random, and so are the misfits. Their squared error, averaged over the draw, splits in two on each case (eq. 12):
+
+```math
+\mathbb{E}\big[(d - y)^2\big] = (d - \bar y)^2 + \mathrm{Var}(y) ,
+```
+
+where ``d`` is the target, ``y`` the output, and ``\bar y`` its mean over the draws. The first term is the systematic error. The second is the variance the noise in the weights adds to the output, and it is paid for in misfit bits. So a weight's noise costs bits wherever it moves the output, and a weight can afford a wide cloud only where the output doesn't care about it.
+
+### The loss
+
+Put the two parts together. Sending the targets with a cloud of weights costs, in nats,
+
+```math
+\underbrace{\frac{1}{2s^2}\,\mathbb{E}_{w \sim Q}\Big[\sum_c (d_c - y_c)^2\Big]}_{\text{expected squared error}} \;+\; \underbrace{\mathrm{KL}(Q \,\|\, P)}_{\text{information in the weights}} \;+\; N \log\!\big(\sqrt{2\pi}\, s\big),
+```
+
+with the tolerance term left out, and the network is trained on it. Widening a cloud shrinks its KL but adds variance to the output; narrowing it does the reverse. Each weight settles where the two balance.
+
+Every choice of clouds gives a code the sender could really use, so the loss is a codelength the sender can achieve. It is not the shortest the prior allows. That would be ``-\log_2 P(\text{targets})``, with the weights averaged over the prior, and the loss reaches it only when ``Q`` is the exact Bayesian posterior over the weights, which a Gaussian per weight is not. So the loss is an upper bound, and training tightens it.
+
+The loss has modern names: it is the negative *evidence lower bound* (ELBO), and training a network on it with sampled gradients is *Bayes by Backprop* (Blundell et al., 2015).
+"""
+
+# ╔═╡ 6094aea6-a49a-5994-af61-7fa4253be3cd
+md"""
+### Training on it
+
+The paper computed the expected squared error exactly, with tables for pushing a Gaussian through each hidden unit, which only works for one hidden layer and linear outputs (§5.3). Today we sample instead. Draw ``\varepsilon`` from a standard Gaussian and set ``w = \mu + \sigma \varepsilon``, and the gradient of what that sample costs flows back to ``\mu`` and ``\sigma``. This is the *reparameterization trick*. A few samples per step are enough.
+
+In code, a cloud is one flat vector `θ` with named parts: the means `θ.μ`, the log-widths `θ.ρ`, the log of the misfit code's width ``s``, and the prior's own parameters.
+"""
+
+# ╔═╡ 13dc376e-9c80-51b8-ad55-43405a0bede7
+# Lux names the layers of a Chain `layer_1`, `layer_2`, …
+LAYERS = (:layer_1, :layer_2)
+
+# ╔═╡ b2bf51b2-ec1d-5779-b33f-ab29f6252e3e
+widths(θ) = exp.(θ.ρ)
+
+# ╔═╡ b5a144de-7e9c-5e59-8d36-eeaca5979795
+"One draw of the weights from the cloud θ, given standard Gaussian noise ε."
+sample(θ, ε) = θ.μ .+ widths(θ) .* ε
+
+# ╔═╡ 6a142169-be9c-551e-971d-f119bd744a7d
+"Standard Gaussian noise, shaped like the weights μ."
+noise_like(rng, μ) = ComponentArray(randn(rng, length(μ)), getaxes(μ))
+
+# ╔═╡ 5f9babdd-3f19-5094-a970-b54c312a128b
+"One Gaussian prior per layer, N(0, σₚ²), stored as log σₚ."
+gaussian_prior() = ComponentArray(layer_1 = 0.0, layer_2 = 0.0)
+
+# ╔═╡ 01b6047a-9102-5935-8aa1-81fd0a989d99
+md"""
+Two more things are learned along with the clouds: the width ``s`` of the misfit code, and the width of the prior for each layer, "letting the data determine the prior" (§6). These are only a few numbers, and the paper ignores what they cost to send. So do we.
+
+Two habits come from the paper:
+
+- **A warm-up** (§8). With the full weight cost from the start, the paper found that "it is initially very easy to reduce the combined cost function by using weights that contain almost no information, and it is very hard to escape from this poor solution". So the weight cost starts at 0.05 of its size and rises to 1 over the first few thousand steps. We also hold the prior still during the warm-up, so that it doesn't shrink to fit weights that haven't grown yet.
+- **Five starts** (§9). Train from five random starts, and keep the one with the shortest description: the one that saves the most. That is MDL's own rule, applied once more, and it never looks at test data.
+"""
+
+# ╔═╡ e5095ad0-2394-593c-842a-4c187bbc910f
 # Noise draws per training step.
 SAMPLES = 4
 
-# ╔═╡ 4487a7bf-aa25-5c18-9d66-1541be0660aa
+# ╔═╡ c73bfdc7-f9d3-5945-acf1-dfdaca253077
 md"""
-Does it work?
+## Testing the claim
+
+The claim has two halves, and our task can test both. Trained on the loss, a network should generalize better than one tuned the usual way, and without holding any data out. And among trained networks, the ones whose weights cost much less than they save should generalize best.
+
+### The baseline
+
+The paper compared against weight decay, tuned with held-out data. Try strengths ``\lambda`` from ``10^{-4}`` to 1, score each by 5-fold cross-validation on the training cases, and retrain on all of them with the best. Our ``\lambda`` weighs the penalty against the *mean* squared error rather than the sum, so it is the ratio of widths from above divided by the number of cases, ``\lambda = s^2 / N\sigma_w^2``:
 """
 
-# ╔═╡ 6e7448f1-cbab-50cb-8bb6-467dc8e6b9a1
+# ╔═╡ 604db986-57ab-5229-991d-1ed52f386a91
+subset(data, idx) = (x = data.x[:, idx], y = data.y[:, idx])
+
+# ╔═╡ 3a71b0d9-be6c-54b8-9e0d-eae5dfa59dad
 md"""
-## A surface among distractors
+### One Gaussian
 
-The paper's one experiment predicts how well peptide molecules work: 128 inputs, only 105 training cases, and a network with 521 weights that "overfits the 105 training cases very badly" without a penalty (§9).
+Start with the paper's basic code: one Gaussian prior for each layer, its width learned (§5–6). Train from five starts:
+"""
 
-Our task has the same shape, few cases and many inputs, but a truth we can draw. The target depends on two inputs, ``x_1`` and ``x_2``, through two ridges crossing at right angles:
+# ╔═╡ 11bdb645-bcf7-5c15-a5c6-2b943b4027a8
+md"""
+Unlike weight decay, it has found all four plateaus, the two at 0 included. What speckle is left sits on the edges of the ridges. There each unit is steep, so the little that its distractor weights still let through is enough to tip a pixel; on the plateaus the units are saturated, and the same leak changes nothing.
+"""
+
+# ╔═╡ 4cd46967-e9fc-5a51-b092-7325a7abf661
+md"""
+### Noise in, nothing out
+
+The plain network memorized pure noise. What does the loss make of the same targets? Five starts again:
+"""
+
+# ╔═╡ 8d48e436-8617-534e-a7e8-495c71f148b7
+md"""
+### A mixture of Gaussians
+
+The paper's answer is a richer prior: a mixture of Gaussians (§6.1, §7). Its own mixture had five, with learned means, so that each could settle on a cluster of weights, and its result, a relative test error of 0.286 against weight decay's 0.317, came from that prior. Ours is simpler: two components, both centred on 0, their widths and shares learned, and shared by the weights of both layers. A narrow one, the *spike*, is for the weights that should be 0, and a wide one for the ones that shouldn't. Saying "zero" now means pointing at the spike.
+
+The KL from a cloud to a mixture has no closed form, so we use the paper's bound (eq. 17), where ``\pi_k`` is the share of the component ``P_k``:
 
 ```math
-f(x_1, x_2) = \tanh(2x_1 + x_2) - \tanh(x_1 - 2x_2),
+\mathrm{KL}(Q \,\|\, P) \;\le\; -\log \sum_k \pi_k \, e^{-\mathrm{KL}(Q \,\|\, P_k)} .
 ```
 
-plus noise with a standard deviation of 0.1. Twenty more inputs are distractors: random numbers the target ignores.
+The paper shows that the bound is itself the cost of a code (§7), so the loss is still a description length.
 """
 
-# ╔═╡ aa0acb05-6cf6-5110-a640-43c32dc3c376
-begin
-    INPUTS = 22      # x₁, x₂, and 20 distractors
-    HIDDEN = 8
-    NOISE = 0.1
-end;
+# ╔═╡ 14931e07-d199-5611-84ca-0a515a39903c
+logsumexp(v) = let m = Zygote.ignore_derivatives(() -> maximum(v)); m + log(sum(exp.(v .- m))) end
 
-# ╔═╡ d028f6a9-8c13-5900-8843-c884676a52ff
-"Two ridges crossing at right angles: four plateaus."
-truth(x₁, x₂) = tanh(2x₁ + x₂) - tanh(x₁ - 2x₂)
+# ╔═╡ 781d8d49-01ea-5211-9ecd-a4a0e064c0c8
+"A mixture of two zero-mean Gaussians, a narrow spike and a wide one, shared by all the weights: stored as log widths and the logits of their shares."
+mixture_prior() = ComponentArray(log_σ = [log(0.05), log(1.0)], logit = [0.0, 0.0])
 
-# ╔═╡ cd86a994-1a5e-5348-b7a2-a3005ec2002b
-"`n` cases: standard Gaussian inputs, and the truth of the first two plus noise as the target."
-function dataset(rng, n)
-    x = randn(rng, INPUTS, n)
-    (; x, y = reshape(truth.(x[1, :], x[2, :]), 1, n) .+ NOISE .* randn(rng, 1, n))
+# ╔═╡ ee6e09f2-2151-5238-8cf9-7cbff70d5d2f
+is_mixture(prior) = :logit in propertynames(prior)
+
+# ╔═╡ fafc485f-3338-581b-b8ad-5cfd2bd5a055
+"The paper's bound (17) on each weight's KL to a mixture, in nats: −log Σₖ πₖ exp(−KL(Q ‖ Pₖ))."
+function mixture_costs(μ, σ, prior)
+    σs = exp.(prior.log_σ)
+    logπ = prior.logit .- logsumexp(prior.logit)
+    terms = [logπ[k] .- kl.(μ, σ, σs[k]) for k in eachindex(σs)]
+    m = Zygote.ignore_derivatives(() -> reduce((a, b) -> max.(a, b), terms))
+    -(m .+ log.(sum(t -> exp.(t .- m), terms)))
 end
 
-# ╔═╡ 163d85c8-1728-590c-93ef-4f2a382ae034
-TRAIN, TEST = dataset(Xoshiro(4), 100), dataset(Xoshiro(5), 2000);
+# ╔═╡ a2229ad1-11aa-5e0d-b9f3-d610980e2b65
+"Each weight's KL in nats, for the means `μ` and widths `σ` of one layer. (Mixture priors come later, in Where the bits go.)"
+costs(μ, σ, prior, layer) = is_mixture(prior) ? mixture_costs(μ, σ, prior) : kl.(μ, σ, exp(getproperty(prior, layer)))
 
-# ╔═╡ 3d341cd9-ef40-5706-a347-b843588943d4
-cases(data) = size(data.y, 2)
+# ╔═╡ a9143211-6207-5f4f-8b09-b97a06ef55b3
+"The weights' KL in nats: every weight of every layer."
+weight_cost(θ, prior = θ.prior) = sum(l -> sum(costs(getproperty(θ.μ, l), getproperty(widths(θ), l), prior, l)), LAYERS)
 
-# ╔═╡ 99b251a7-0999-5d5a-8e30-24ae5d4269a7
-"The bits to send `data`'s targets with no network: one Gaussian code, at their own mean and spread."
-no_network(data) = bits(optimal_misfit(var(data.y; corrected = false), cases(data)))
-
-# ╔═╡ bd2f5c38-a64a-5620-be68-c0d6dccf00ab
+# ╔═╡ 80a53f12-49fd-556b-bd19-0a3e6bc35079
 md"""
-The network has one hidden layer of $HIDDEN tanh units and a linear output:
+Five starts again:
 """
 
-# ╔═╡ 8684b3bc-c401-53be-b945-9a500d58bc64
-MODEL = Lux.Chain(Lux.Dense(INPUTS => HIDDEN, tanh), Lux.Dense(HIDDEN => 1))
+# ╔═╡ b63350b6-22a5-5904-af65-02b3571cb763
+md"""
+### The embarrassment
 
-# ╔═╡ 13f3cae4-42a6-5a41-9551-35edb66f09cb
+All of this had 100 cases for 22 inputs. The paper had 105 cases for 128 inputs, fewer cases than inputs. Take our cases down to 50, then 30, and train both codes from five starts again:
+"""
+
+# ╔═╡ f95b8975-7eb9-5d1c-86d0-5ee0d19c1178
+"The truth as network weights: units 1 and 2 are the two ridges, and everything else is 0."
+function truth_means()
+    μ = zero(weights(Xoshiro(0)))
+    μ.layer_1.weight[1, 1:2] .= (2, 1)
+    μ.layer_1.weight[2, 1:2] .= (-1, 2)
+    μ.layer_2.weight[1, 1:2] .= (1, 1)
+    μ
+end
+
+# ╔═╡ 1ff92f76-894f-57d4-bfbe-b626480e13cb
+md"""
+## Appendix: helpers
+
+Counting cases and converting nats, the cloud's predictions and its bills, the plane, number formatting, and the chart style.
+"""
+
+# ╔═╡ 3f6cc915-39b8-50cd-9527-64993e41a46b
+num_of_cases(data) = size(data.y, 2)
+
+# ╔═╡ 9ccc1f86-94c6-534c-bd09-cad1de2d352c
+# The same inputs, with targets that are pure noise.
+NOISE_TARGETS = (x = TRAIN.x, y = randn(Xoshiro(101), 1, num_of_cases(TRAIN)));
+
+# ╔═╡ 2aeefb9c-d9f3-5189-9d01-99296749a21b
+bits(nats) = nats / log(2)
+
+# ╔═╡ 645418b5-949a-549b-a139-473f5f0dc1bf
+"The bits to send `data`'s targets with no network: one Gaussian code, at their own mean and spread."
+no_network(data) = bits(
+	best_misfit_cost(var(data.y; corrected = false), num_of_cases(data))
+)
+
+# ╔═╡ f7728920-be5f-5993-bc72-bbecbcf07d80
 # Dense layers keep no state, but Lux asks for it.
 STATE = last(Lux.setup(Xoshiro(0), MODEL));
 
-# ╔═╡ bb999611-d12b-59f2-ae66-66a27d2ed036
-"A fresh set of weights, as one flat vector with named parts: `layer_1.weight`, `layer_1.bias`, and so on."
-weights(rng) = ComponentArray(Lux.f64(first(Lux.setup(rng, MODEL))))
-
-# ╔═╡ eacce216-0d0c-5fe6-b9f3-cf4e8baf2964
+# ╔═╡ d62c9d9b-80f5-5977-90a7-8915a360dd90
+"Forward pass."
 predict(w, x) = first(MODEL(x, w, STATE))
 
-# ╔═╡ b63b5905-5c4e-55c8-8d13-476e5ab903f6
+# ╔═╡ 25420e04-b36b-5938-8fd7-472bead269bc
+"Sum of squared errors."
 sse(w, data) = sum(abs2, predict(w, data.x) .- data.y)
 
-# ╔═╡ e1fc2b21-4fd5-5e3a-aad8-09347f70d54b
-md"""
-### Two baselines
-
-First, the network trained on squared error alone, with no penalty. Then weight decay, tuned the way the paper tuned it: try strengths ``\lambda`` from ``10^{-4}`` to 1, score each by 5-fold cross-validation on the training cases, and retrain on all of them with the best.
-"""
-
-# ╔═╡ 66a12152-3c15-535a-8234-d95dc5f9cfd5
+# ╔═╡ c5f39cf6-2893-5993-9e5b-30cc55ea7bab
 "The network trained on squared error alone."
-plain_net(data) = train((w, t) -> sse(w, data) / cases(data), weights(Xoshiro(1)); steps = 5000)
+plain_net(data) = train(
+	(w, t) -> sse(w, data) / num_of_cases(data),
+	weights(Xoshiro(1));
+	steps = 5000
+)
 
-# ╔═╡ 61cb553f-6662-5c3a-9e03-33ca3caddcf6
+# ╔═╡ 09eabb3f-704e-59e6-b54d-505eeeb7d0e4
+PLAIN = plain_net(TRAIN);
+
+# ╔═╡ 364ba16a-24b2-5296-a9f2-dbc60240312f
+MEMORIZER = plain_net(NOISE_TARGETS);
+
+# ╔═╡ 5deb2101-b3e8-50d5-b539-def1b355aa30
+"""
+The cloud θ's ledger for `data`'s targets, in bits against no network: what it saves on the misfits, with the misfit
+code's best width; what it spends on the weights, their KL; and the net saving.
+"""
+function ledger(θ, data; draws = 500, rng = Xoshiro(8))
+    mse = mean(_ -> sse(sample(θ, noise_like(rng, θ.μ)), data), 1:draws) / num_of_cases(data)
+    saved = no_network(data) - bits(best_misfit_cost(mse, num_of_cases(data)))
+    spent = bits(weight_cost(θ))
+    (; saved, spent, net = saved - spent)
+end
+
+# ╔═╡ dd526d59-4939-5057-b7f7-033238d6c653
+"Of several trained clouds, the one with the shortest description, the largest net saving: the paper's rule for restarts."
+shortest(θs, data) = argmax(θ -> ledger(θ, data).net, θs)
+
+# ╔═╡ 034f774e-317b-5b32-a608-d5a2772d5815
 "The network trained with weight decay of strength λ."
-decayed(λ, data) = train((w, t) -> sse(w, data) / cases(data) + λ * sum(abs2, w), weights(Xoshiro(1)); steps = 3000)
+decayed(λ, data) = train(
+	(w, t) -> sse(w, data) / num_of_cases(data) + λ * sum(abs2, w), 
+	weights(Xoshiro(1));
+	steps = 3000
+)
 
-# ╔═╡ 55e4a16a-716d-5688-8de2-a1b1ee2c1a04
-subset(data, idx) = (x = data.x[:, idx], y = data.y[:, idx])
-
-# ╔═╡ 847e1840-6cab-53a2-a3eb-0cac0a45be59
+# ╔═╡ 6d5d8243-2bc8-5aa5-ac36-a5d9bb3ec05d
 "Weight decay as the paper tuned it: each λ scored by 5-fold cross-validation, then the best retrained on all of `data`."
 function cross_validated(data; lambdas = 10 .^ (-4:0.5:0), folds = 5, rng = Xoshiro(6))
-    n = cases(data)
+    n = num_of_cases(data)
     parts = collect(Iterators.partition(randperm(rng, n), n ÷ folds))
     score(λ) = mean(fold -> sse(decayed(λ, subset(data, setdiff(1:n, fold))), subset(data, fold)), parts)
     λ = argmin(score, lambdas)
     (; λ, net = decayed(λ, data))
 end
 
-# ╔═╡ ba806ec6-e932-541d-838e-8a8a5858e770
-# About 50 trainings; under a minute.
-PLAIN, DECAY = plain_net(TRAIN), cross_validated(TRAIN);
+# ╔═╡ 88329ada-a959-5972-b1fe-a4f2f402a6d2
+# About 45 trainings; under a minute.
+DECAY = cross_validated(TRAIN);
 
-# ╔═╡ 6a926537-5474-5612-bd09-2706dfad6b18
-md"""
-We measure error as the paper does (eq. 27): squared error on the test set, relative to always guessing the mean. A score of 1 is no better than the mean, and the noise alone sets a floor.
+# ╔═╡ e6407394-aa39-5a0b-96c5-2fa925bfa5d8
 """
-
-# ╔═╡ b492e048-6dad-5967-b662-8367adbd5020
-relative_error(ŷ, data) = sum(abs2, ŷ .- data.y) / sum(abs2, data.y .- mean(data.y))
-
-# ╔═╡ c8c879b4-9e50-5fa3-ac9c-74489dbfe824
-md"""
-Here is what each one learned, drawn on the plane. Each pixel gets fresh random values for the 20 distractors, as a test case would:
-"""
-
-# ╔═╡ 49b4ce24-4faf-4e50-946b-af3a2bae798a
-md"""
-### It fits anything
-
-The plain network can fit more than the signal. Give it the same inputs with targets that are pure noise, standard Gaussian numbers with nothing to find, and train it the same way:
-"""
-
-# ╔═╡ 8bc7f4aa-d1fe-4542-a6ce-dae1af790894
-# The same inputs, with targets that are pure noise.
-NOISE_TARGETS = (x = TRAIN.x, y = randn(Xoshiro(101), 1, cases(TRAIN)));
-
-# ╔═╡ 4d3b2ad6-14c5-4c9a-a128-05c46cf04c35
-MEMORIZER = plain_net(NOISE_TARGETS);
-
-# ╔═╡ f7c15090-cde7-5eee-b79d-bbf97ec5b481
-md"""
-## One Gaussian
-
-Start with the paper's own code: one Gaussian prior for each layer, its width learned (§5–6). Train from five starts:
-"""
-
-# ╔═╡ f19ed824-417e-5324-9c63-6b403fd15cfb
-md"""
-## The price of a precise zero
-
-Follow the bits. Each used unit has 20 weights coming in from the distractors, and the truth wants every one of them at 0. It has to be a precise 0, though. A distractor weight with a wide cloud adds noise to its unit on every case, twenty such weights add up, and the unit's signal drowns. So each must be held close to 0, and precision is exactly what the KL charges for.
-
-Here is what those zeros cost:
-"""
-
-# ╔═╡ ac5ad65b-bed9-5f24-9629-0b8d2ab9cdbd
-md"""
-## Spike and slab
-
-The paper's answer is a richer prior: a mixture of Gaussians (§6.1, §7). Ours has two components, both centred on 0, their widths and shares learned. A narrow *spike* is for the weights that should be 0, and a wide *slab* for the ones that shouldn't. Saying "zero" now means pointing at the spike.
-
-The KL from a cloud to a mixture has no closed form, so the paper bounds it (eq. 17):
-
-```math
-\mathrm{KL}(Q \,\|\, P) \;\le\; -\log \sum_k \pi_k \, e^{-\mathrm{KL}(Q \,\|\, P_k)} ,
-```
-
-where ``\pi_k`` is the share of the component ``P_k``. The bound is itself the cost of a code (§7). Pick a component at random, in proportion to ``\pi_k e^{-\mathrm{KL}(Q \,\|\, P_k)}``, name it, and send the weight under it, with bits back for both the weight and the pick.
-"""
-
-# ╔═╡ e611b95b-9546-5c86-982c-d9d38c8834e0
-logsumexp(v) = let m = Zygote.ignore_derivatives(() -> maximum(v)); m + log(sum(exp.(v .- m))) end
-
-# ╔═╡ 238d7d24-9b2f-5db6-bc41-9486e80c8696
-"Spike and slab: two zero-mean Gaussians shared by all the weights, stored as log widths and the logits of their shares."
-mixture_prior() = ComponentArray(log_σ = [log(0.05), log(1.0)], logit = [0.0, 0.0])
-
-# ╔═╡ dd230776-5525-5edf-9132-c52bae2d840d
-is_mixture(prior) = :logit in propertynames(prior)
-
-# ╔═╡ 8c0255cd-505b-5140-927f-c94d49a83f6c
-"The mixture's means: learned ones if the prior has them, 0 otherwise."
-component_means(prior) = :mean in propertynames(prior) ? prior.mean : zero(prior.log_σ)
-
-# ╔═╡ 79f20810-8d56-5efb-82b9-af0e325a1008
-"The paper's bound (17) on each weight's KL to a mixture, in nats: −log Σₖ πₖ exp(−KL(Q ‖ Pₖ))."
-function mixture_costs(μ, σ, prior)
-    ms, σs = component_means(prior), exp.(prior.log_σ)
-    logπ = prior.logit .- logsumexp(prior.logit)
-    terms = [logπ[k] .- kl.(μ, σ, ms[k], σs[k]) for k in eachindex(σs)]
-    m = Zygote.ignore_derivatives(() -> reduce((a, b) -> max.(a, b), terms))
-    -(m .+ log.(sum(t -> exp.(t .- m), terms)))
-end
-
-# ╔═╡ af0c7a72-67cb-523d-91e8-c5ea35af6903
-"Each weight's KL in nats, for the means `μ` and widths `σ` of one layer. (Mixture priors come with the spike and slab.)"
-costs(μ, σ, prior, layer) = is_mixture(prior) ? mixture_costs(μ, σ, prior) : kl.(μ, σ, exp(getproperty(prior, layer)))
-
-# ╔═╡ d2a69541-91e2-5f1e-8ed0-7387e721c733
-"The weights' KL in nats: every weight of every layer."
-weight_cost(θ, prior = θ.prior) = sum(l -> sum(costs(getproperty(θ.μ, l), getproperty(widths(θ), l), prior, l)), LAYERS)
-
-# ╔═╡ 21731057-61ac-5169-9b2f-294492ea5c4f
-"""
-The loss in nats: the misfit averaged over the noise draws `εs`, plus `β` times the weights' KL.
+The loss in nats: the misfit cost averaged over the noise draws `εs`, plus `β` times the weights' KL.
 The prior learns only when `learn_prior` is true.
 """
 function objective(θ, εs, β, learn_prior, data)
     s = exp(θ.log_noise)
     prior = learn_prior ? θ.prior : Zygote.dropgrad(θ.prior)
-    mean(ε -> misfit(predict(sample(θ, ε), data.x) .- data.y, s), εs) + β * weight_cost(θ, prior)
+    mean(ε -> misfit_cost(predict(sample(θ, ε), data.x) .- data.y, s), εs) + β * weight_cost(θ, prior)
 end
 
-# ╔═╡ 1ed93071-dd7d-557e-8cab-39afacd7bf73
-"Train a cloud of weights on `data`: KL warm-up over `warmup` steps, prior held still until `prior_from`."
+# ╔═╡ eac8d019-c638-5190-8e50-de49099a5c27
+"Train a cloud of weights on `data`: weight cost warmed up over `warmup` steps, prior held still until `prior_from`."
 function noisy_net(rng, data; prior = gaussian_prior(), σ₀ = 1e-2, s₀ = 0.5, warmup = 3000, steps = 8000, prior_from = 3000)
     μ = weights(rng)
     θ = ComponentArray(μ = μ, ρ = fill!(similar(μ), log(σ₀)), log_noise = log(s₀), prior = prior)
@@ -487,63 +594,48 @@ function noisy_net(rng, data; prior = gaussian_prior(), σ₀ = 1e-2, s₀ = 0.5
     train((θ, t) -> objective(θ, Zygote.ignore_derivatives(draws), β(t), t >= prior_from, data), θ; steps, cooldown = 2000)
 end
 
-# ╔═╡ e2ef921b-a032-560f-b2c2-f1c217a87d3d
+# ╔═╡ 1e5e51eb-80ec-536a-859c-ce087491ce9c
 # Five starts, about 5 seconds each.
 ONE_GAUSSIAN = [noisy_net(Xoshiro(s), TRAIN; prior = gaussian_prior()) for s in 1:5];
 
-# ╔═╡ 32130f1b-6ab3-5a41-aa57-0dbaa4aebcaf
-"The bits to send `data`'s targets with the cloud θ: the error, with the misfit code's best width, plus the weights' KL."
-function description(θ, data; draws = 500, rng = Xoshiro(8))
-    mse = mean(_ -> sse(sample(θ, noise_like(rng, θ.μ)), data), 1:draws) / cases(data)
-    error, weight = bits(optimal_misfit(mse, cases(data))), bits(weight_cost(θ))
-    (; total = error + weight, error, weight)
-end
-
-# ╔═╡ c1ea2a1a-8c7d-5a19-b8a6-5a65bc667056
-"Of several trained clouds, the one with the shortest description: the paper's rule for restarts."
-shortest(θs, data) = argmin(θ -> description(θ, data).total, θs)
-
-# ╔═╡ d40b8fc3-f248-5df9-97a4-8e721aea88fd
+# ╔═╡ 59a6369d-a0f2-5e2d-86db-1f19fdf4181f
 BEST_GAUSSIAN = shortest(ONE_GAUSSIAN, TRAIN);
 
-# ╔═╡ b222534d-14a0-5687-aced-ce338c35ed12
-md"""
-Five starts again:
-"""
-
-# ╔═╡ 96e84353-2638-54d2-ba84-c1d37f349a48
+# ╔═╡ fcdbe5e8-df07-5650-89fe-622dfd3f217f
 # Five starts, about 5 seconds each.
-SPIKE_SLAB = [noisy_net(Xoshiro(s), TRAIN; prior = mixture_prior()) for s in 1:5];
+NOISE_NET = shortest([noisy_net(Xoshiro(s), NOISE_TARGETS) for s in 1:5], NOISE_TARGETS);
 
-# ╔═╡ 8bfaab5c-8582-58b1-84f9-f1eaf436d25d
-BEST_SLAB = shortest(SPIKE_SLAB, TRAIN);
+# ╔═╡ 0f928b74-c921-5f8d-a473-00dbe725af3a
+# Five starts, about 5 seconds each.
+MIXTURE = [noisy_net(Xoshiro(s), TRAIN; prior = mixture_prior()) for s in 1:5];
 
-# ╔═╡ e7882799-942c-5e76-8f20-aa8ad279f8d5
-md"""
-And the network on the plane. A cloud of weights gives two pictures: the mean prediction, and how far the predictions spread as the weights are drawn from their clouds.
-"""
+# ╔═╡ 94cf7183-2d9e-5667-aef3-e328987831d8
+BEST_MIXTURE = shortest(MIXTURE, TRAIN);
 
-# ╔═╡ 759432e5-0238-5b32-a2fa-7d49d4bd5638
-md"""
-## The shortest of five
+# ╔═╡ 08c9d2ee-9c4c-57db-ac0b-2e8cc638fd03
+Markdown.parse("""
+The paper offered its claim as intuition. Six years later, David McAllester's PAC-Bayes bound (1999) proved a precise form of it. If the prior is chosen before the data are seen, and the cases are drawn independently, then a network whose weights are drawn from a cloud ``Q`` has a test error at most about ``\\sqrt{\\mathrm{KL}(Q \\,\\|\\, P) / 2N}`` above its training error, on a loss scaled from 0 to 1. The KL is the paper's weight cost, in nats. Few bits keep the test error close to the training error, though the fit still has to be good. [Dziugaite and Roy (2017)](https://arxiv.org/abs/1703.11008) trained Gaussian clouds of weights to minimize this bound directly, and got guarantees that weren't vacuous for deep networks with millions of weights.
 
-Here are all five spike-and-slab starts:
-"""
+The loss is still with us. It is the negative ELBO, the loss of Bayes by Backprop, and, over latent variables instead of weights, the loss of variational autoencoders. Its trap is still with us too: variational autoencoders warm up their KL term from near 0 ([Bowman et al., 2016](https://arxiv.org/abs/1511.06349)), for the paper's reason.
 
-# ╔═╡ 77afafbd-8e9a-545e-a4d0-9f06f7b1cc54
-md"""
-## Clusters
+Notebook 03 left a twist to carry along: Blier and Ollivier found that variational codes, the descendants of this loss, give "surprisingly poor" compression bounds on deep networks. The loss is an upper bound, only as tight as the clouds and the prior allow. Even at $(length(BEST_MIXTURE.μ)) weights, ours needed the right prior, a warm-up, and restarts, and at 30 cases a much shorter description existed that training couldn't find.
 
-So far the slab is one wide Gaussian, and a weight in it pays to say where in the slab it sits. But the weights that matter take only a few values. The paper's fix is *soft weight sharing* (§6.1, after Nowlan and Hinton): give the mixture several components, and let their means be learned as well, so that each can settle on a cluster of weights.
+The next item, Shane Legg's *Machine Super Intelligence*, asks what the right prior is, if not one we chose. Solomonoff's answer weighs every computable hypothesis by ``2^{-K}``: notebook 02's complexity, back as a prior.
+""")
 
-Start from the spike-and-slab network, swap in a prior of five components, and keep training:
-"""
+# ╔═╡ e5c4ba91-0cdd-5ba6-ba9a-eddc7e822f8d
+# 20 trainings, about 2 minutes.
+SCARCE = map((30, 50)) do n
+    data = dataset(Xoshiro(4), n)
+    (; n, data,
+       gaussian = [noisy_net(Xoshiro(s), data; prior = gaussian_prior()) for s in 1:5],
+       mixture = [noisy_net(Xoshiro(s), data; prior = mixture_prior()) for s in 1:5])
+end;
 
-# ╔═╡ 76fb678b-6028-55e7-8c02-8b711ea3b42a
-"Clusters (§6.1): a mixture whose components' means are learned as well, given starting means, widths and shares."
-cluster_prior(means, σs, πs) = ComponentArray(mean = float.(means), log_σ = log.(σs), logit = log.(πs))
+# ╔═╡ fb39e911-5cb0-5cc2-ae15-c4563a6f2f45
+DECAY_SCARCE = cross_validated(SCARCE[1].data);
 
-# ╔═╡ ae2219df-ba07-52f7-bab7-50e6f653af4a
+# ╔═╡ d4830351-0e00-5b5e-9204-8da9bf420a48
 """
 Keep training a cloud at full weight cost, with its prior swapped for `prior`.
 With `free_means = false`, the means stay where they are, and only the widths, the misfit code and the prior move.
@@ -557,224 +649,120 @@ function refit(θ, data, prior; free_means = true, steps = 6000, rng = Xoshiro(3
     train((θ, t) -> objective(held(θ), Zygote.ignore_derivatives(draws), 1.0, true, data), θ; steps, lr = 3e-3, cooldown = 1000)
 end
 
-# ╔═╡ dd8b178a-edca-564d-847b-b5eafc12076c
-# The spike stays; four more components start evenly spaced, as the paper's did.
-CLUSTERED = let spike = argmin(exp.(BEST_SLAB.prior.log_σ))
-    start = cluster_prior([0.0, -2.4, -1.2, 1.2, 2.4], [exp(BEST_SLAB.prior.log_σ[spike]); fill(0.6, 4)], [0.95; fill(0.0125, 4)])
-    refit(BEST_SLAB, TRAIN, start; steps = 3000, rng = Xoshiro(2))
-end;
-
-# ╔═╡ 779904d4-e1a5-584d-9905-686ce66b7968
-md"""
-Here is our version of the paper's Figure 3: the prior's density, before and after, with every weight's mean as a tick underneath.
-"""
-
-# ╔═╡ 1f7d138d-870a-5aaf-905c-563e66698403
-md"""
-## The embarrassment
-
-The paper's network had 105 cases for 128 inputs: fewer cases than inputs. Ours had 100 for 22. Take our cases down to 50, then 30, and train both codes from five starts again:
-"""
-
-# ╔═╡ 18483c2a-7563-5a8a-834c-b8ba5fc25c62
-# 20 trainings, about 2 minutes.
-SCARCE = map((30, 50)) do n
-    data = dataset(Xoshiro(4), n)
-    (; n, data,
-       gaussian = [noisy_net(Xoshiro(s), data; prior = gaussian_prior()) for s in 1:5],
-       slab = [noisy_net(Xoshiro(s), data; prior = mixture_prior()) for s in 1:5])
-end;
-
-# ╔═╡ 7fc8bd6f-80a6-539c-8da8-0f67219a7358
-"The truth as network weights: units 1 and 2 are the two ridges, and everything else is 0."
-function truth_means()
-    μ = zero(weights(Xoshiro(0)))
-    μ.layer_1.weight[1, 1:2] .= (2, 1)
-    μ.layer_1.weight[2, 1:2] .= (-1, 2)
-    μ.layer_2.weight[1, 1:2] .= (1, 1)
-    μ
-end
-
-# ╔═╡ 1e788fbd-3fac-5193-8b30-cbfc2030d2dc
-"The truth's description under a code: its means fixed at the true weights, and everything else refitted."
+# ╔═╡ 8e55a733-7d7b-53ff-ab1f-b30e93b7dbbd
+"The truth under a code: its means fixed at the true weights, and everything else refitted."
 function price_truth(data, prior)
     μ = truth_means()
     start = ComponentArray(μ = μ, ρ = fill!(similar(μ), log(1e-2)), log_noise = log(0.5), prior = prior)
     refit(start, data, prior; free_means = false)
 end
 
-# ╔═╡ 7b4ce275-0d03-5c5f-bf6c-d93bc9ace736
+# ╔═╡ b5b82864-abe3-5ec4-9b0f-6d18ad2af047
 # Six refits, about half a minute.
-TRUTH_PRICED = map([(30, SCARCE[1].data), (50, SCARCE[2].data), (cases(TRAIN), TRAIN)]) do (n, data)
-    (; n, data, gaussian = price_truth(data, gaussian_prior()), slab = price_truth(data, mixture_prior()))
+TRUTH_PRICED = map([(30, SCARCE[1].data), (50, SCARCE[2].data), (num_of_cases(TRAIN), TRAIN)]) do (n, data)
+    (; n, data, gaussian = price_truth(data, gaussian_prior()), mixture = price_truth(data, mixture_prior()))
 end;
 
-# ╔═╡ 72bf4b43-c4f7-526d-aace-4cdeee55c7dc
+# ╔═╡ 37c8db24-5ecc-51b5-9b61-0ae7f40458a0
 # Six refits, about half a minute.
 FREED = let r = TRUTH_PRICED[1]
     (gaussian = [refit(r.gaussian, r.data, r.gaussian.prior; rng = Xoshiro(10 + s)) for s in 1:3],
-     slab = [refit(r.slab, r.data, r.slab.prior; rng = Xoshiro(10 + s)) for s in 1:3])
+     mixture = [refit(r.mixture, r.data, r.mixture.prior; rng = Xoshiro(10 + s)) for s in 1:3])
 end;
 
-# ╔═╡ 6c6bc05e-2d98-55da-bedb-8218e335ae46
-DECAY_SCARCE = cross_validated(SCARCE[1].data);
-
-# ╔═╡ 0da56f56-f121-552e-925b-74e59cf792ba
-md"""
-## Appendix: helpers
-
-The bits in notebook 03's knobs, the cloud's predictions and its bills, the plane, number formatting, and the chart style.
-"""
-
-# ╔═╡ 4853009c-f381-5e67-aadf-5e11a18ba45b
-# Notebook 03's biased string: 20 flips of a coin that lands 1 with probability 0.2.
-BIASED = "11010000000011000000"
-
-# ╔═╡ 1d6c0194-bafa-5856-a326-0f0e7f2d6836
-NAMES = (coin = "coin", bernoulli = "Bernoulli", markov = "Markov", digits = "Digits")
-
-# ╔═╡ 559a6c6a-c255-5147-8891-f2fb30993a41
-harmonic(m) = sum(i -> 1 / i, 1:m; init = 0.0)
-
-# ╔═╡ 60cefa68-d30c-53e6-987c-bfb142d2fd73
-logfactorial(m) = sum(log, 1:m; init = 0.0)
-
-# ╔═╡ 73e62e19-f7e4-54e3-b311-979ecb4fb108
-"""
-A coin with a uniform prior on its bias, seen to land 1 `ones` times in `total` flips: its misfit and knob bits.
-The posterior is Beta(ones + 1, zeros + 1), under which E[log θ] = H(ones) − H(total + 1), with H the harmonic numbers.
-"""
-function coin_split(ones, total)
-    zeros = total - ones
-    elog(m) = harmonic(m) - harmonic(total + 1)
-    code = log(total + 1) + logfactorial(total) - logfactorial(ones) - logfactorial(zeros)
-    misfit = -(ones * elog(ones) + zeros * elog(zeros))
-    (misfit = bits(misfit), knobs = bits(code - misfit))
-end
-
-# ╔═╡ 161ba9b4-5ad8-5db5-8283-60b41fd7c913
-"How many times a 1 follows the bit `a` in `x`, and how many times anything does."
-function after(x, a)
-    pairs = collect(zip(x, Iterators.drop(x, 1)))
-    (count(==((a, '1')), pairs), count(p -> first(p) == a, pairs))
-end
-
-# ╔═╡ 185b3cf4-322d-55b3-90af-62d530d57bcf
-"Each of notebook 03's machines, with a uniform prior on its knobs: misfit and knob bits for `x`."
-function knob_splits(x)
-    n = length(x)
-    add(a, b) = (misfit = a.misfit + b.misfit, knobs = a.knobs + b.knobs)
-    (coin = (misfit = float(n), knobs = 0.0),
-     bernoulli = coin_split(count(==('1'), x), n),
-     markov = add(add((misfit = 1.0, knobs = 0.0), coin_split(after(x, '0')...)), coin_split(after(x, '1')...)),
-     digits = (misfit = 0.0, knobs = float(n)))
-end
-
-# ╔═╡ 78432c2a-7e73-54b5-81ad-dd74f17a2146
-"The standard deviation of a Beta(a, b) distribution."
-beta_spread(a, b) = sqrt(a * b / ((a + b)^2 * (a + b + 1)))
-
-# ╔═╡ d007987b-13ad-5229-8f71-d778be11fe58
+# ╔═╡ f1ccd75e-bfdc-5ad2-a02b-c468a14eb0fc
 "The cloud's prediction: the network's output averaged over draws of the weights."
 predictive_mean(θ, x; draws = 500, rng = Xoshiro(7)) = mean(_ -> predict(sample(θ, noise_like(rng, θ.μ)), x), 1:draws)
 
-# ╔═╡ 701c6429-f4a4-5e65-a4de-db02e32251c4
+# ╔═╡ 077df9e7-ca77-530f-8d6f-931f9e26498c
 cloud_error(θ, data) = relative_error(predictive_mean(θ, data.x), data)
 
-# ╔═╡ 7bbcb97c-6846-5d1f-b52e-77a9b26028b7
+# ╔═╡ 84aacc97-52cc-5221-978e-874554ea41a3
 "The hidden units whose outgoing weight, and at least one incoming weight, have a mean larger than its width."
 function active_units(θ)
     keep = abs.(θ.μ) .>= widths(θ)
     filter(h -> keep.layer_2.weight[1, h] && any(keep.layer_1.weight[h, :]), 1:HIDDEN)
 end
 
-# ╔═╡ 04e2518c-4c92-5aaf-b459-a2e50c6821e6
+# ╔═╡ 21f5451d-01bf-567d-982b-4517de423903
 GRID = range(-2.5, 2.5; length = 121)
 
-# ╔═╡ 4c908bb4-0cdb-5fe1-af2d-bbc501f4b8e7
+# ╔═╡ 6b41f06e-f343-5728-817e-eae08696a8e5
 # Every pixel of the plane as a test input: (x₁, x₂) from the grid, and fresh distractors.
 PLANE = let pixels = vec([(a, b) for a in GRID, b in GRID])
     vcat(first.(pixels)', last.(pixels)', randn(Xoshiro(9), INPUTS - 2, length(pixels)))
 end;
 
-# ╔═╡ 7d8ca2f2-6fb6-5e0d-afda-5e1551f0b9ae
+# ╔═╡ 3b314357-4a17-5bde-8170-310d7f2ba3ee
 on_plane(ŷ) = reshape(ŷ, length(GRID), length(GRID))
 
-# ╔═╡ f6198bc5-2cab-5929-891d-9fd3dbfb5e9e
+# ╔═╡ 0d0339c0-c1ab-5f51-8b5b-e72219150fe7
 gauss(w, m, s) = exp(-(w - m)^2 / (2s^2)) / (sqrt(2π) * s)
 
-# ╔═╡ dfb48298-7453-515b-b0be-7ceb0c9ecec1
+# ╔═╡ fc1f13fd-db8c-514a-bbc7-a9234145f6d5
 "`x` with `d` decimals."
 fixed(x, d = 1) = Printf.format(Printf.Format("%.$(d)f"), x)
 
-# ╔═╡ df7650fa-1790-5eaf-90c3-4b4e28c87a46
-let x = BIASED, n = length(BIASED), s = knob_splits(BIASED)
-    rows = ["| $(NAMES[name]) | $(fixed(v.misfit)) | $(fixed(v.knobs)) | $(fixed(v.misfit + v.knobs)) |" for (name, v) in pairs(s)]
-    k = count(==('1'), x)
-    Markdown.parse("""
-    Here is notebook 03's biased string, `$x`, through its four machines:
+# ╔═╡ 75189faf-163a-5b1a-87be-a6743c1e23b3
+Markdown.parse("""
+The map is static. The network fitted the distractors along with the signal, so fresh distractors at every pixel scramble its answer. Its relative test error is $(fixed(relative_error(predict(PLAIN, TEST.x), TEST), 3)), where the truth itself would score $(fixed(FLOOR, 3)).
 
-    | machine | misfit | bits in the knobs | total |
-    |:--|--:|--:|--:|
-    $(join(rows, "\n"))
+How far does this go? Give it the same inputs with targets that are pure noise, standard Gaussian numbers with nothing to find, and train it the same way:
+""")
 
-    - **The coin and Digits are mirror images.** The coin has no knobs, so all $n bits are misfit. Digits has no misfit at all: its knob must sit in the one interval of width ``2^{-$n}`` whose digits spell the string, and naming that interval takes all $n bits. The totals match. Digits compresses nothing; it moves the string into its knob.
-    - **Bernoulli has one knob too, but holds only $(fixed(s.bernoulli.knobs)) bits in it.** The string pins its bias down only loosely: settings within about $(fixed(beta_spread(k + 1, n - k + 1), 2)) of the best fit it nearly as well, and saying "about $(fixed(k / n, 2))" is cheap.
-    - **Markov** holds $(fixed(s.markov.knobs)) bits in its two knobs, and earns them back by fitting the bunched 1s better.
-
-    So the bits in a knob are set by how precisely the data pins it down, not by the knob's existence. That is the paper's idea, and the rest of this notebook applies it to the weights of a network.
-
-    (These totals average over the prior, where notebook 03's NML scores normalized the best fits. The two are cousins, and differ slightly.)
-    """)
-end
-
-# ╔═╡ 232e4c3a-06ae-51be-9024-ead38fd2628c
-let plain = relative_error(predict(PLAIN, TEST.x), TEST), decay = relative_error(predict(DECAY.net, TEST.x), TEST)
-    Markdown.parse("""
-    The plain network's map is static. It fitted the distractors along with the signal, so fresh distractors at every pixel scramble its answer. Weight decay is calmer but blurred, and still speckled.
-
-    | | relative test error |
-    |:--|--:|
-    | no penalty | $(fixed(plain, 3)) |
-    | weight decay, ``\\lambda`` by cross-validation | $(fixed(decay, 3)) |
-    | the noise alone | $(fixed(NOISE^2 / var(TEST.y), 3)) |
-    """)
-end
-
-# ╔═╡ 3ba21950-72af-475c-881b-e95857fdb55f
+# ╔═╡ ce58e9b6-6f20-5b53-a16c-d43e0eb26801
 let err = relative_error(predict(MEMORIZER, NOISE_TARGETS.x), NOISE_TARGETS)
     Markdown.parse("""
-    Its training error on the noise is $(fixed(err, 3)). It has memorized $(cases(NOISE_TARGETS)) random numbers.
+    Its training error on the noise is $(fixed(err, 3)). It has memorized $(num_of_cases(NOISE_TARGETS)) random numbers.
 
-    That settles what COMP would say about this network. A model that can fit any targets gives every one of them its best fit, so its best fit plus its COMP comes to about the cost of sending the targets as they are, and if the targets can be any real numbers, COMP is infinite. It is Digits again, one level up. COMP prices this network as a memorizer, whatever it actually learned. The bits in its weights don't: they count what this network, trained on these cases, had to hold.
+    That settles what COMP would say about this network. A model that can fit any targets gives every one of them its best fit, so its best fit plus its COMP comes to about the cost of sending the targets as they are, and if the targets can be any real numbers, COMP is infinite. It is Digits again, one level up. [Zhang et al. (2017)](https://arxiv.org/abs/1611.03530), item 23 on our list, made the same observation famous for real networks.
 
-    [Zhang et al. (2017)](https://arxiv.org/abs/1611.03530), item 23 on our list, made the same observation famous for real networks.
+    So COMP fails twice. It can't be computed in time, and if it could, it would not help. It is a price on the class: every network of this shape pays the same. With the price fixed, only the fit decides, and the best fit is memorizing.
 
-    Can the description length do better, with nothing held out?
+    The question has shifted. Notebook 03 asked which model explains a string best. Here we want the network, among all those of one shape, that predicts new cases best, and that needs a price on each network for what it actually learned. The paper charges for exactly that, the bits in its weights after training on these cases, and that charge becomes its loss.
     """)
 end
 
-# ╔═╡ c63f4c7b-6c22-53d2-b6fe-52853ffce99c
-let rows = map(enumerate(ONE_GAUSSIAN)) do (s, θ)
-        d = description(θ, TRAIN)
-        "| $s | $(fixed(d.total)) | $(fixed(d.error)) | $(fixed(d.weight)) | $(length(active_units(θ))) | $(fixed(cloud_error(θ, TEST), 3)) |"
-    end
-    best = findmin(θ -> description(θ, TRAIN).total, ONE_GAUSSIAN)[2]
+# ╔═╡ 4a8c2ead-7277-50d5-a17a-08aa9fff050e
+Markdown.parse("""
+For our $(num_of_cases(TRAIN)) training targets, that is $(fixed(no_network(TRAIN))) bits, plus the tolerance term.
+
+Measured against no network, a network is an investment. On the misfits it *saves* bits, because they are smaller than the targets' own spread. On its weights it *spends* bits. It is worth sending only if it saves more than it spends, and its net saving is how much shorter it makes the description.
+
+Read this way, the paper's claim is a ledger: a network generalizes when its weights cost much less than they save. The intuition is the paper's own. Weights that hold few bits can't have memorized much, so what they hold must be structure the cases share, and structure carries over to new cases.
+""")
+
+# ╔═╡ d1c1a326-d00d-5bfd-a564-a4ffb65134cd
+Markdown.parse("""
+Weight decay is calmer than the plain network, but blurred, and still speckled by the distractors. Its small weights keep the hidden units in their nearly linear middle, so the whole network is close to a tilted plane: high above, low below, and the two plateaus at 0 are missing. The paper saw the same (§9): with small weights, "the hidden units operate in their central linear range, so the whole network is effectively linear".
+
+| | relative test error |
+|:--|--:|
+| no penalty | $(fixed(relative_error(predict(PLAIN, TEST.x), TEST), 3)) |
+| weight decay, ``\\lambda`` by cross-validation | $(fixed(relative_error(predict(DECAY.net, TEST.x), TEST), 3)) |
+| the truth itself | $(fixed(FLOOR, 3)) |
+""")
+
+# ╔═╡ 22127acf-0b2e-5b6e-ba2e-d39e003c78ee
+let runs = sort([(s = s, l = ledger(θ, TRAIN), units = length(active_units(θ)), err = cloud_error(θ, TEST)) for (s, θ) in enumerate(ONE_GAUSSIAN)]; by = r -> -r.l.net)
+    rows = ["| $(r.s) | $(fixed(r.l.saved)) | $(fixed(r.l.spent)) | $(fixed(r.l.net)) | $(r.units) | $(fixed(r.err, 3)) |" for r in runs]
     Markdown.parse("""
-    | start | total (bits) | error | weights | hidden units used | relative test error |
+    Here is each start's ledger, in bits against no network, best first. A hidden unit counts as *used* if its outgoing weight and at least one incoming weight have means larger than their widths.
+
+    | start | saved on the misfits | spent on the weights | net saving | hidden units used | relative test error |
     |:-:|--:|--:|--:|:-:|--:|
     $(join(rows, "\n"))
 
-    With no network at all, the targets cost $(fixed(no_network(TRAIN))) bits. Start $best gives the shortest description, and we keep it. A unit is *used* if its outgoing weight and at least one incoming weight have means larger than their widths.
+    Start $(first(runs).s) saves the most, and we keep it.
     """)
 end
 
-# ╔═╡ 580d60f3-b6c7-584d-b57f-a3dc2e0e68f7
-let θ = BEST_GAUSSIAN, d = description(BEST_GAUSSIAN, TRAIN)
+# ╔═╡ eeb4827a-f390-5f76-8556-b2aeb465afba
+let θ = BEST_GAUSSIAN, l = ledger(BEST_GAUSSIAN, TRAIN)
     units = active_units(θ)
     rows = ["| unit $h | $(fixed(θ.μ.layer_1.weight[h, 1], 2)) | $(fixed(θ.μ.layer_1.weight[h, 2], 2)) | $(fixed(θ.μ.layer_1.bias[h], 2)) | $(fixed(θ.μ.layer_2.weight[1, h], 2)) |" for h in units]
     Markdown.parse("""
-    It works. The shortest start uses $(length(units)) hidden units, and their weights are the truth's two ridges:
+    It works. The best start uses $(length(units)) hidden units, and their weights are the truth's two ridges:
 
     | | ``x_1`` | ``x_2`` | bias | out |
     |:--|--:|--:|--:|--:|
@@ -784,78 +772,105 @@ let θ = BEST_GAUSSIAN, d = description(BEST_GAUSSIAN, TRAIN)
 
     (A unit can flip the signs of all its weights at once and compute the same thing, since ``\\tanh`` is odd.)
 
-    Its test error is $(fixed(cloud_error(θ, TEST), 3)), against $(fixed(relative_error(predict(DECAY.net, TEST.x), TEST), 3)) for weight decay, and nothing was held out to get it. That is the paper's headline result, reproduced: on the peptides, 0.286 against weight decay's 0.317.
+    Its relative test error is $(fixed(cloud_error(θ, TEST), 3)), against $(fixed(relative_error(predict(DECAY.net, TEST.x), TEST), 3)) for weight decay, and nothing was held out to get it. It spends $(fixed(l.spent)) bits on its weights and saves $(fixed(l.saved)) on the misfits: a net saving of $(fixed(l.net)) bits.
 
-    The network also pays for itself. With it, the targets cost $(fixed(d.total)) bits; with no network, $(fixed(no_network(TRAIN))).
-
-    But look at the split: $(fixed(d.error)) bits of error, and $(fixed(d.weight)) bits in the weights, for a network with $(3 * length(units)) weights that matter. Where do the bits go?
+    Here it is on the plane, its prediction averaged over draws of the weights:
     """)
 end
 
-# ╔═╡ a60c3b9e-7b38-59ee-bc9a-73fc57ec8254
-let rows = map(SCARCE) do (; n, data, gaussian, slab)
-        g, s = description(shortest(gaussian, data), data), description(shortest(slab, data), data)
-        collapsed(θs) = count(θ -> description(θ, data).weight < 1, θs)
-        "| $n | $(fixed(no_network(data))) | $(fixed(g.total)) ($(collapsed(gaussian)) of 5 collapsed) | $(fixed(s.total)) ($(collapsed(slab)) of 5 collapsed) |"
+# ╔═╡ 5f01405a-c452-5604-8424-569e5925454b
+let runs = [(s = s, l = ledger(θ, TRAIN), err = cloud_error(θ, TEST)) for (s, θ) in enumerate(ONE_GAUSSIAN)]
+    best, frugal = argmax(r -> r.l.net, runs), argmin(r -> r.l.spent, runs)
+    Markdown.parse("""
+    Now read the table's net savings against its test errors. The starts are sorted by net saving, and their test errors fall into line, up to a near-tie between the top two. That is the claim, seen across five networks trained on the same cases: the more a network's weights save beyond what they cost, the better it generalizes.
+
+    Spending little is not enough on its own, though. Start $(frugal.s) spends only $(fixed(frugal.l.spent)) bits on its weights, against $(fixed(best.l.spent)) for start $(best.s), and its test error is $(fixed(frugal.err, 3)). It fits badly, and saves only $(fixed(frugal.l.saved)) bits on the misfits. What counts is how little the weights cost *relative to what they save*, and that balance is exactly what the loss trades.
+    """)
+end
+
+# ╔═╡ a506b9d7-5a85-549a-bd26-76c9fa947a09
+let l = ledger(NOISE_NET, NOISE_TARGETS)
+    Markdown.parse("""
+    The best of them uses $(length(active_units(NOISE_NET))) hidden units. Its weights cost $(fixed(l.spent, 2)) bits, and its net saving is $(fixed(l.net, 2)) bits: it is no network at all, give or take half a bit.
+
+    The loss found nothing worth sending, and sent nothing. The plain network and the noisy one saw the same $(num_of_cases(NOISE_TARGETS)) numbers, and neither held any out. One memorized them; the other priced memorizing them, and declined.
+    """)
+end
+
+# ╔═╡ 009641e7-3f55-55bd-969d-c7bb9d207c8a
+let l = ledger(BEST_GAUSSIAN, TRAIN), units = active_units(BEST_GAUSSIAN)
+    Markdown.parse("""
+    ### Where the bits go
+
+    Back to the real targets. The best one-Gaussian network carries the signal in $(3 * length(units)) weights, its $(length(units)) used units' weights from ``x_1``, ``x_2`` and to the output, yet its weights spend $(fixed(l.spent)) bits. Where do they go?
+
+    Each used unit has 20 weights coming in from the distractors, and the truth wants every one of them at 0. It has to be a precise 0. A distractor weight with a wide cloud adds noise to its unit on every case, twenty such weights add up, and the unit's signal drowns. So each must be held close to 0, much closer than the prior is wide, and that narrowing is what the KL charges for:
+    """)
+end
+
+# ╔═╡ 0dcac29e-382b-525a-a70f-6d04979abae5
+let rows = map(SCARCE) do (; n, data, gaussian, mixture)
+        g, s = ledger(shortest(gaussian, data), data), ledger(shortest(mixture, data), data)
+        collapsed(θs) = count(θ -> ledger(θ, data).spent < 1, θs)
+        "| $n | $(fixed(g.net)) ($(collapsed(gaussian)) of 5 collapsed) | $(fixed(s.net)) ($(collapsed(mixture)) of 5 collapsed) |"
     end
     Markdown.parse("""
-    | cases | no network | one Gaussian, shortest | spike and slab, shortest |
+    | cases | one Gaussian, best start | mixture, best start |
+    |--:|--:|--:|
+    $(join(rows, "\n"))
+    | $(num_of_cases(TRAIN)) | $(fixed(ledger(BEST_GAUSSIAN, TRAIN).net)) | $(fixed(ledger(BEST_MIXTURE, TRAIN).net)) |
+
+    Net savings in bits. A start has *collapsed* when its weights cost less than 1 bit: the network has given up, and predicts the mean of the targets, which is no network at all.
+
+    At 30 cases, every start of both codes collapses. At 50, one Gaussian still collapses every time, and the mixture gets partway. The paper met the same thing. The shortest description it found "was the solution in which all the weights except the output bias are equal and negative", with a relative error of about 1, and it called this "a serious embarrassment for the Minimum Description Length Principle or for our method of describing the weights".
+
+    There are three suspects: MDL itself, the code, or the search. We can tell them apart, because we know the truth. Fix the means at the true weights, refit everything else, and see what the truth saves under each code:
+    """)
+end
+
+# ╔═╡ 80694af1-403b-57e3-b836-5cff96c5c3e3
+let trained = [[ledger(shortest(r.mixture, r.data), r.data).net for r in SCARCE]; ledger(BEST_MIXTURE, TRAIN).net]
+    rows = map(zip(TRUTH_PRICED, trained)) do (r, best)
+        "| $(r.n) | $(fixed(ledger(r.gaussian, r.data).net)) | $(fixed(ledger(r.mixture, r.data).net)) | $(fixed(best)) |"
+    end
+    Markdown.parse("""
+    | cases | the truth, one Gaussian | the truth, mixture | mixture, best trained |
     |--:|--:|--:|--:|
     $(join(rows, "\n"))
-    | $(cases(TRAIN)) | $(fixed(no_network(TRAIN))) | $(fixed(description(BEST_GAUSSIAN, TRAIN).total)) | $(fixed(description(BEST_SLAB, TRAIN).total)) |
 
-    Descriptions in bits. A start has *collapsed* when its weights carry less than 1 bit: the network has given up, and predicts the mean of the targets.
-
-    At 30 cases, every start of both codes collapses. At 50, one Gaussian still collapses every time, and the spike and slab gets partway. The paper met the same thing at 105 cases. Its shortest description "was the solution in which all the weights except the output bias are equal and negative", and the paper called it "a serious embarrassment for the Minimum Description Length Principle or for our method of describing the weights".
-
-    There are three suspects: MDL itself, the code, or the search. We can tell them apart, because we know the truth. Fix the means at the true weights, refit everything else, and see what the truth costs under each code:
-    """)
-end
-
-# ╔═╡ 6e770c8f-ee22-5763-b7a0-6ac4d0a829ed
-let shortest_slab = [description(shortest(r.slab, r.data), r.data).total for r in SCARCE]
-    trained = [shortest_slab; description(BEST_SLAB, TRAIN).total]
-    rows = map(zip(TRUTH_PRICED, trained)) do (r, best)
-        "| $(r.n) | $(fixed(no_network(r.data))) | $(fixed(description(r.gaussian, r.data).total)) | $(fixed(description(r.slab, r.data).total)) | $(fixed(best)) |"
-    end
-    Markdown.parse("""
-    | cases | no network | the truth, one Gaussian | the truth, spike and slab | spike and slab, shortest trained |
-    |--:|--:|--:|--:|--:|
-    $(join(rows, "\n"))
-
-    Under the spike and slab, the truth beats no network even at 30 cases. Under one Gaussian it doesn't.
+    Net savings in bits. Under the mixture, the truth saves bits even at 30 cases; training just never found it. Under one Gaussian, at 30 and 50 cases, the truth costs more than it saves.
 
     The means were held still, though. Free them too, starting from the priced truth at 30 cases, and train on, three times each with fresh noise:
     """)
 end
 
-# ╔═╡ aa41fdda-d1b2-5c1d-ba62-41376ff121d7
+# ╔═╡ 3f895d6d-2c7a-58c1-924a-ae9830aca097
 "The range of `values` with `d` decimals, or a single number when its ends agree."
 between(values, d = 1) = let (lo, hi) = extrema(values)
     fixed(lo, d) == fixed(hi, d) ? fixed(lo, d) : "$(fixed(lo, d)) to $(fixed(hi, d))"
 end
 
-# ╔═╡ a19db1e5-39d5-59f0-aff3-fd5ffe477b07
+# ╔═╡ 301dd0cc-6bfa-5964-b6b7-a914f4bb455d
 let data = TRUTH_PRICED[1].data
-    span(θs) = between([description(θ, data).total for θ in θs])
+    span(θs) = between([ledger(θ, data).net for θ in θs])
     errors(θs) = between([cloud_error(θ, TEST) for θ in θs], 3)
     Markdown.parse("""
-    - **One Gaussian walks away from the truth**, to the trivial network: $(span(FREED.gaussian)) bits, against $(fixed(no_network(data))) for no network, with test error $(errors(FREED.gaussian)).
-    - **The spike and slab stays**, and improves to $(span(FREED.slab)) bits, with test error $(errors(FREED.slab)). Weight decay, on the same $(cases(data)) cases, gets $(fixed(relative_error(predict(DECAY_SCARCE.net, TEST.x), TEST), 3)).
+    - **One Gaussian walks away from the truth**, to the trivial network: a net saving of $(span(FREED.gaussian)) bits, with test error $(errors(FREED.gaussian)).
+    - **The mixture stays**, and improves to a net saving of $(span(FREED.mixture)) bits, with test error $(errors(FREED.mixture)). Weight decay, on the same $(num_of_cases(data)) cases, gets $(fixed(relative_error(predict(DECAY_SCARCE.net, TEST.x), TEST), 3)).
 
     So the verdicts split.
 
-    - **One Gaussian: the code.** Even the truth costs more than no network, and started there, training walks away.
-    - **Spike and slab: the search.** A description shorter than no network exists, and it is stable once found, but no random start reaches it. The paper suspected as much: "it is initially very easy to reduce the combined cost function by using weights that contain almost no information, and it is very hard to escape from this poor solution".
+    - **One Gaussian: the code.** Even the truth costs more than it saves, and started there, training walks away.
+    - **The mixture: the search.** A description that saves bits exists, and it is stable once found, but no random start reaches it. This is the trap the warm-up was meant to avoid: weights that hold almost nothing are easy to reach, and hard to leave.
     - **MDL itself is acquitted**, here. With a good code, the shortest description is still the truth.
     """)
 end
 
-# ╔═╡ 18920dea-0a3a-5dad-97f4-59275b852e9d
+# ╔═╡ cec8f3c9-b875-5e81-aa2c-df88ac7ae07a
 "A whole number, with commas between the thousands."
 commas(n::Integer) = replace(string(n), r"(?<=\d)(?=(\d{3})+$)" => ",")
 
-# ╔═╡ 8a9c713a-4583-489d-b29a-7fb4ede3855a
+# ╔═╡ 4ab48f39-82fd-5a3b-8c65-160eb701dc29
 let rows = ["| $(r.n) | $(commas(2^r.n)) | $(fixed(r.comp, 2)) | $(fixed(r.seconds, 3)) s |" for r in COMP_TIMINGS]
     slowest = last(COMP_TIMINGS)
     years = slowest.seconds * 2.0^(100 - slowest.n) / (365.25 * 24 * 3600)
@@ -866,34 +881,34 @@ let rows = ["| $(r.n) | $(commas(2^r.n)) | $(fixed(r.comp, 2)) | $(fixed(r.secon
 
     Each extra bit doubles the work. At this rate, 100 bits would take about ``10^{$(round(Int, log10(years)))}`` years, some ``10^{$(round(Int, log10(years / 1.38e10)))}`` times the age of the universe. Notebook 03 stopped at 20 bits for this reason.
 
-    Bernoulli does have a way out. Its best fit depends on a string only through ``k``, the number of 1s, so all the strings with the same ``k`` can be counted at once: ``n + 1`` terms instead of ``2^n``.
+    Bernoulli does have a way out. Its best fit depends on a string only through its count of 1s, so all the strings with the same count can be summed at once: ``n + 1`` terms instead of ``2^n``.
 
-    A network has no such way out. Its fit doesn't come down to a few counts. Its targets are real numbers, so the sum becomes an integral over every possible set of targets. And every term in it is a training run. The split into misfit and knob bits needs none of that: it asks only about the data at hand. That is the route the paper takes to put MDL to work on networks.
+    A network has no such way out. Its fit doesn't come down to a few counts, so computing its COMP takes one training run per dataset. And its targets are real numbers, so the datasets don't even form a list: the sum becomes an integral over every possible set of targets. Quantize the targets to some fine tolerance, and the list is finite again, but it grows exponentially with the number of cases, like ``2^n``, with a far larger base.
     """)
 end
 
-# ╔═╡ 6232a001-e615-5a52-8996-e077cc07b962
+# ╔═╡ 947ec45d-2a0e-545e-8c2c-9d41313272af
 let n = length(weights(Xoshiro(0)))
     Markdown.parse("""
-    That is $n weights for $(cases(TRAIN)) training cases. Here is the truth on the ``(x_1, x_2)`` plane, with the training cases on it, and $(commas(cases(TEST))) more held out for testing:
+    That is $n weights for $(num_of_cases(TRAIN)) training cases. Here is the truth on the ``(x_1, x_2)`` plane, with the training cases on it, and $(commas(num_of_cases(TEST))) more held out for testing:
     """)
 end
 
-# ╔═╡ 69a98789-05be-57d3-998d-023c8886d065
+# ╔═╡ 7afb28ea-f81f-5845-9893-09bd63657b65
 VIZ = (surface = "#fcfcfb", text = "#0b0b0b", text2 = "#52514e", grid = "#e4e3de")
 
-# ╔═╡ 34b8cc2c-21c6-5535-914b-eee938917549
+# ╔═╡ 8ce757c7-3507-5b82-9b64-31a218a2b79b
 SERIES_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]
 
-# ╔═╡ 993b0551-9828-5b72-9989-f59a0ed92e6a
+# ╔═╡ 04b5296d-d362-5623-9a88-448c87f1f18d
 # Blue to red through a neutral grey, for values around 0.
 DIVERGING = cgrad([colorant"#184f95", colorant"#5598e7", colorant"#f0efec", colorant"#e34948", colorant"#9c2524"])
 
-# ╔═╡ af751974-a597-5c7a-b189-d13e3c494d71
+# ╔═╡ 386a3f78-ce6a-5434-ab8b-e9fa428aa9a5
 # One blue ramp, light to dark, for magnitudes.
 SEQUENTIAL = cgrad([colorant"#fcfcfb", colorant"#cde2fb", colorant"#86b6ef", colorant"#3987e5", colorant"#1c5cab", colorant"#0d366b"])
 
-# ╔═╡ 85f45203-2058-5d40-b0d6-f102ecd76a65
+# ╔═╡ f85c9643-35bd-5663-9f04-bab99f8d2154
 THEME = Theme(
     fontsize = 13, backgroundcolor = VIZ.surface, textcolor = VIZ.text,
     Axis = (backgroundcolor = VIZ.surface, xgridcolor = VIZ.grid, ygridcolor = VIZ.grid,
@@ -903,25 +918,25 @@ THEME = Theme(
     Legend = (framevisible = false, backgroundcolor = VIZ.surface),
 );
 
-# ╔═╡ f36af0ee-7360-515a-bb55-eec5e006c286
+# ╔═╡ 149bdecd-7728-58b7-b78e-d9f7d1e2871c
 with_theme(THEME) do
     fig = Figure(size = (760, 320))
-    ax = Axis(fig[1, 1]; xlabel = "weight", ylabel = "prior density", title = "A weight's probability: the prior's height, times its bin's width")
+    ax = Axis(fig[1, 1]; xlabel = "value", ylabel = "density", title = "A value's probability: the density's height, times its bin's width")
     w = range(-3, 3; length = 601)
     lines!(ax, w, gauss.(w, 0, 1); color = SERIES_COLORS[1], linewidth = 2)
     v, t = 1.6, 0.3
     h = gauss(v, 0, 1)
     poly!(ax, Rect(v - t / 2, 0, t, h); color = (SERIES_COLORS[1], 0.25), strokecolor = SERIES_COLORS[1], strokewidth = 1)
-    text!(ax, v - t / 2, h / 2; text = "height P(w)", align = (:right, :center), offset = (-6, 0), color = VIZ.text2)
+    text!(ax, v - t / 2, h / 2; text = "height P(x)", align = (:right, :center), offset = (-6, 0), color = VIZ.text2)
     text!(ax, v + t / 2, h; text = "width t", align = (:left, :bottom), offset = (6, 2), color = VIZ.text2)
     ylims!(ax, 0, 0.47)
     fig
 end
 
-# ╔═╡ 0dc32d55-1ff5-562c-90f5-ae33a1567ec2
+# ╔═╡ a1887041-35ed-5e9e-a653-25fcc1935d40
 plane_axis(position, title) = Axis(position; title, aspect = 1, xlabel = "x₁", ylabel = "x₂", limits = (extrema(GRID), extrema(GRID)))
 
-# ╔═╡ ecb5cbfa-1f14-5177-a210-fd647c77cf68
+# ╔═╡ d3f55395-d4ae-5450-9b7d-901134745ecb
 "A map of `z` over the plane, with the training cases as rings."
 function plane_map!(ax, z; colormap = DIVERGING, colorrange = (-2.2, 2.2))
     hm = heatmap!(ax, GRID, GRID, z; colormap, colorrange)
@@ -929,139 +944,90 @@ function plane_map!(ax, z; colormap = DIVERGING, colorrange = (-2.2, 2.2))
     hm
 end
 
-# ╔═╡ a6543692-b681-5b35-b21b-14b8d0bca235
+# ╔═╡ 4d023645-bc11-59f7-a488-3169674ff70d
 with_theme(THEME) do
     fig = Figure(size = (470, 420))
-    ax = plane_axis(fig[1, 1], "The truth, and the $(cases(TRAIN)) training cases")
+    ax = plane_axis(fig[1, 1], "The truth, and the $(num_of_cases(TRAIN)) training cases")
     hm = plane_map!(ax, on_plane(truth.(PLANE[1, :], PLANE[2, :])))
     Colorbar(fig[1, 2], hm; label = "f(x₁, x₂)")
     fig
 end
 
-# ╔═╡ 19239ab2-b80e-5555-95b0-b27268132f3b
+# ╔═╡ 07e1afbe-1435-5366-a807-d9d8c1976008
 with_theme(THEME) do
-    fig = Figure(size = (860, 420))
+    fig = Figure(size = (470, 420))
     hm = plane_map!(plane_axis(fig[1, 1], "No penalty"), on_plane(predict(PLAIN, PLANE)))
-    plane_map!(plane_axis(fig[1, 2], "Weight decay, λ = $(round(DECAY.λ; sigdigits = 2))"), on_plane(predict(DECAY.net, PLANE)))
-    Colorbar(fig[1, 3], hm; label = "prediction")
+    Colorbar(fig[1, 2], hm; label = "prediction")
     fig
 end
 
-# ╔═╡ 2b72bbbb-474a-5c55-aaab-f5f6b614e77d
+# ╔═╡ d98a33f9-22fb-5a73-86d1-e560e7cf3ac7
+with_theme(THEME) do
+    fig = Figure(size = (470, 420))
+    hm = plane_map!(plane_axis(fig[1, 1], "Weight decay, λ = $(round(DECAY.λ; sigdigits = 2))"), on_plane(predict(DECAY.net, PLANE)))
+    Colorbar(fig[1, 2], hm; label = "prediction")
+    fig
+end
+
+# ╔═╡ df7eb95a-cb0d-56ce-85d8-09b582fc2d9f
+with_theme(THEME) do
+    fig = Figure(size = (470, 420))
+    hm = plane_map!(plane_axis(fig[1, 1], "One Gaussian: the mean prediction"), on_plane(predictive_mean(BEST_GAUSSIAN, PLANE)))
+    Colorbar(fig[1, 2], hm; label = "prediction")
+    fig
+end
+
+# ╔═╡ e20c620c-1bb9-5b36-a2b6-6e5b90de84ac
+with_theme(THEME) do
+    fig = Figure(size = (900, 420))
+    hm = plane_map!(plane_axis(fig[1, 1], "The truth"), on_plane(truth.(PLANE[1, :], PLANE[2, :])))
+    plane_map!(plane_axis(fig[1, 2], "Mixture of Gaussians: the mean prediction"), on_plane(predictive_mean(BEST_MIXTURE, PLANE)))
+    Colorbar(fig[1, 3], hm; label = "value")
+    fig
+end
+
+# ╔═╡ b0455b32-4928-5765-b48c-74cf5c3cbd78
+with_theme(THEME) do
+    maps = [
+        ("The truth", truth.(PLANE[1, :], PLANE[2, :]), FLOOR),
+        ("No penalty", predict(PLAIN, PLANE), relative_error(predict(PLAIN, TEST.x), TEST)),
+        ("Weight decay", predict(DECAY.net, PLANE), relative_error(predict(DECAY.net, TEST.x), TEST)),
+        ("One Gaussian", predictive_mean(BEST_GAUSSIAN, PLANE), cloud_error(BEST_GAUSSIAN, TEST)),
+        ("Mixture of Gaussians", predictive_mean(BEST_MIXTURE, PLANE), cloud_error(BEST_MIXTURE, TEST)),
+    ]
+    fig = Figure(size = (900, 640))
+    hms = map(enumerate(maps)) do (i, (title, z, err))
+        plane_map!(plane_axis(fig[fldmod1(i, 3)...], "$title: $(fixed(err, 3))"), on_plane(z))
+    end
+    Colorbar(fig[2, 3], last(hms); label = "prediction", vertical = false, width = Relative(0.8), tellheight = false)
+    fig
+end
+
+# ╔═╡ 12dfbff1-23b7-5764-9f3b-c011780ccd70
 "A mixture's shares, πₖ."
 shares(prior) = exp.(prior.logit .- logsumexp(prior.logit))
 
-# ╔═╡ cf66fedc-69f2-5fed-b3d4-b7439ea262f8
+# ╔═╡ 387c10aa-faf0-5008-8cfc-9c96abd00ff1
 "The share of a cloud's narrowest prior component: the spike."
 spike_share(θ) = shares(θ.prior)[argmin(exp.(θ.prior.log_σ))]
 
-# ╔═╡ 83be2aaa-be46-5f52-b953-caebd8f0f3c3
-let rows = map(enumerate(SPIKE_SLAB)) do (s, θ)
-        d = description(θ, TRAIN)
-        "| $s | $(fixed(d.total)) | $(fixed(d.weight)) | $(length(active_units(θ))) | $(round(Int, 100 * spike_share(θ)))% | $(fixed(cloud_error(θ, TEST), 3)) |"
-    end
-    Markdown.parse("""
-    | start | description (bits) | weights | hidden units used | weights in the spike | relative test error |
-    |:-:|--:|--:|:-:|--:|--:|
-    $(join(rows, "\n"))
-    """)
-end
-
-# ╔═╡ 0ceceac7-724a-5e07-80e0-715bfac800a5
-let runs = [(d = description(θ, TRAIN), units = length(active_units(θ)), share = spike_share(θ)) for θ in SPIKE_SLAB]
-    span(group) = between([r.d.total for r in group])
-    best = argmin(r -> r.d.total, runs)
+# ╔═╡ d78a68bb-5df1-5bb6-bdb8-72f4bea340ab
+let runs = [(l = ledger(θ, TRAIN), units = length(active_units(θ)), share = spike_share(θ), err = cloud_error(θ, TEST)) for θ in MIXTURE]
+    span(group) = between([r.l.net for r in group])
+    best = argmax(r -> r.l.net, runs)
     split_ridge = filter(r -> r.units > 2, runs)
     loose = filter(r -> r.units == 2 && r.share < 0.9, runs)
-    units = active_units(BEST_SLAB)
-    rows = ["| unit $h | $(fixed(BEST_SLAB.μ.layer_1.weight[h, 1], 2)) | $(fixed(BEST_SLAB.μ.layer_1.weight[h, 2], 2)) | $(fixed(BEST_SLAB.μ.layer_1.bias[h], 2)) | $(fixed(BEST_SLAB.μ.layer_2.weight[1, h], 2)) |" for h in units]
     Markdown.parse("""
-    They found three kinds of answer:
+    The other starts landed elsewhere. $(length(split_ridge)) of them split one ridge across two units, for a net saving of $(span(split_ridge)) bits. $(length(loose)) found the two ridges again, under a looser mixture whose spike holds only $(round(Int, 100 * minimum(r.share for r in loose)))–$(round(Int, 100 * maximum(r.share for r in loose)))% of the weights, so pointing at it costs more: a net saving of $(span(loose)). The best saves $(fixed(best.l.net)).
 
-    - **The two ridges, on two units**, at $(fixed(best.d.total)) bits.
-    - **One ridge split across two units**: three units used, at $(span(split_ridge)) bits.
-    - **The two ridges again, under a looser mixture**: the spike holds only $(round(Int, 100 * minimum(r.share for r in loose)))–$(round(Int, 100 * maximum(r.share for r in loose)))% of the weights, so pointing at it costs more, and the description grows to $(span(loose)) bits.
-
-    Test error can't tell these apart: all of them sit at or near the noise floor. Description length can, and it puts the truth first:
-
-    | | ``x_1`` | ``x_2`` | bias | out |
-    |:--|--:|--:|--:|--:|
-    $(join(rows, "\n"))
-    | the truth, first ridge | 2 | 1 | 0 | 1 |
-    | the truth, second ridge | −1 | 2 | 0 | 1 |
-
-    That is the paper's rule for restarts doing real work. (On three other draws of the training data, in our prototype runs, the shortest description was the truth each time.)
-
-    The weights that matter sit near −1, 1 and 2. Can the prior learn that too?
+    All five score $(between([r.err for r in runs], 3)) on the test set, so test error can't rank them. The ledger can, and it puts the truth first.
     """)
 end
 
-# ╔═╡ 9faedece-781f-5980-ac9b-aacc3d58b535
-"The weights that matter, sorted: means larger than 0.5 in size."
-signal_weights(θ) = sort(filter(w -> abs(w) > 0.5, collect(θ.μ)))
-
-# ╔═╡ 933bcc4a-1b91-50f0-9c70-0caa71c0abab
-let before = description(BEST_SLAB, TRAIN), after = description(CLUSTERED, TRAIN)
-    used = shares(CLUSTERED.prior) .> 0.001
-    means = sort(component_means(CLUSTERED.prior)[used])
-    listed(ws) = join(fixed.(ws, 2), ", ")
-    Markdown.parse("""
-    $(count(used)) of the 5 components lock onto $(listed(means)), and the fifth goes unused. The weights that matter snap onto them:
-
-    - before: $(listed(signal_weights(BEST_SLAB)))
-    - after: $(listed(signal_weights(CLUSTERED)))
-
-    The weights' bill falls from $(fixed(before.weight)) to $(fixed(after.weight)) bits, and the description from $(fixed(before.total)) to $(fixed(after.total)). A weight in a cluster now costs about ``\\log_2(1/\\pi_k)``, the price of naming its cluster, because the cluster's mean already carries its value.
-
-    There is a catch, and it is Digits again. Like the paper, we never pay to send the prior's own parameters. So the values moved out of the weights and into the prior's means, for nothing. With one component per weight, the prior could hold every weight, and the weights would cost almost nothing. Five components is the cap that keeps the trick honest.
-
-    The order matters, too. Started from scratch, five components don't reliably find the clusters (in our prototype runs, they collapsed onto 0 or stayed wide). First learn which weights matter; then learn what they are.
-
-    All of this had $(cases(TRAIN)) cases. What happens with as few as the paper had?
-    """)
-end
-
-# ╔═╡ 94e6d0e8-2003-56d7-96e6-de07aee2b290
-"A mixture prior's density at `w`."
-prior_density(prior, w) = let ms = component_means(prior), σs = exp.(prior.log_σ), πs = shares(prior)
-    sum(πs[k] * gauss(w, ms[k], σs[k]) for k in eachindex(σs))
-end
-
-# ╔═╡ cb22c96a-7891-530e-b5d3-1959ca8b923e
-with_theme(THEME) do
-    fig = Figure(size = (900, 380))
-    w = range(-2.6, 2.6; length = 20_001)
-    for (i, (title, θ)) in enumerate((("Spike and slab", BEST_SLAB), ("Five clusters, means learned", CLUSTERED)))
-        ax = Axis(fig[1, i]; title = "$title: $(fixed(description(θ, TRAIN).weight)) bits in the weights", xlabel = "weight",
-                  ylabel = "prior density", yscale = log10, limits = (extrema(w), (1e-3, 2e2)))
-        lines!(ax, w, max.(prior_density.(Ref(θ.prior), w), 1e-4); color = SERIES_COLORS[1], linewidth = 2)
-        rangebars!(ax, collect(θ.μ), fill(1.2e-3, length(θ.μ)), fill(4e-3, length(θ.μ)); direction = :y, color = (colorant"#52514e", 0.6))
-    end
-    fig
-end
-
-# ╔═╡ a148da85-e9a4-5b1d-bbaa-f189b248a448
-"How far the network's output spreads at each input, as the weights are drawn from their clouds."
-function predictive_spread(θ, x; draws = 300, rng = Xoshiro(10))
-    ŷs = [predict(sample(θ, noise_like(rng, θ.μ)), x) for _ in 1:draws]
-    vec(std(reduce(vcat, ŷs); dims = 1))
-end
-
-# ╔═╡ 7ec892ba-6cec-5026-beca-ff300dae9982
-with_theme(THEME) do
-    fig = Figure(size = (980, 420))
-    hm = plane_map!(plane_axis(fig[1, 1], "Spike and slab: the mean prediction"), on_plane(predictive_mean(BEST_SLAB, PLANE)))
-    Colorbar(fig[1, 2], hm; label = "prediction")
-    spread = on_plane(predictive_spread(BEST_SLAB, PLANE))
-    sp = plane_map!(plane_axis(fig[1, 3], "Its spread across draws of the weights"), spread; colormap = SEQUENTIAL, colorrange = (0, maximum(spread)))
-    Colorbar(fig[1, 4], sp; label = "standard deviation")
-    fig
-end
-
-# ╔═╡ f25e0fee-da63-581f-b9e2-6ad6a3689027
+# ╔═╡ 77df1761-4ebb-5a61-ae36-121f3b299699
 ROW_NAMES = ["x₁"; "x₂"; ["d$i" for i in 1:INPUTS-2]; "bias"; "out"]
 
-# ╔═╡ 5612202f-f037-54e8-bda8-877298356e5e
+# ╔═╡ 9afeec6e-205b-5197-b586-6b5cab85d54f
 "Bits per weight: hidden units, by their inputs, their bias, and their outgoing weight."
 function bit_table(θ)
     first_layer = bits.(costs(θ.μ.layer_1.weight, widths(θ).layer_1.weight, θ.prior, :layer_1))
@@ -1070,7 +1036,7 @@ function bit_table(θ)
     hcat(first_layer, bias, out)
 end
 
-# ╔═╡ 4c4d661a-1cfd-5dfc-9aae-7a593757603f
+# ╔═╡ 54337ec5-d8f6-5ad1-a077-6c1e1ded0573
 "What the zeros cost: the distractor weights into the used hidden units, in bits, with their clouds' mean width."
 function zero_bill(θ)
     units = active_units(θ)
@@ -1078,92 +1044,80 @@ function zero_bill(θ)
     (; count = length(b), total = sum(b), low = minimum(b), high = maximum(b), width = mean(widths(θ).layer_1.weight[units, 3:INPUTS]))
 end
 
-# ╔═╡ b4b9a597-144e-5452-8f47-9be26f4ac9a6
-let z = zero_bill(BEST_GAUSSIAN), σₚ = exp(BEST_GAUSSIAN.prior.layer_1), d = description(BEST_GAUSSIAN, TRAIN)
+# ╔═╡ 103fd665-1073-5fd8-9c20-3a82f23ca479
+let z = zero_bill(BEST_GAUSSIAN), σₚ = exp(BEST_GAUSSIAN.prior.layer_1), l = ledger(BEST_GAUSSIAN, TRAIN)
     Markdown.parse("""
     - There are $(z.count) of them, held to about ``\\pm $(fixed(z.width, 3))``, under a prior of width ``\\sigma_P = $(fixed(σₚ, 2))``.
     - By the KL formula, a zero held that tightly costs about ``\\log_2(\\sigma_P / \\sigma) - \\tfrac12 \\log_2 e``, or $(fixed(bits(kl(0, z.width, σₚ)))) bits. The actual costs run from $(fixed(z.low)) to $(fixed(z.high)) bits each.
-    - Together they cost $(fixed(z.total)) bits: $(round(Int, 100 * z.total / d.weight))% of everything in the weights.
+    - Together they cost $(fixed(z.total)) bits: $(round(Int, 100 * z.total / l.spent))% of the $(fixed(l.spent)) the weights spend.
 
     Here is the whole bill, weight by weight:
     """)
 end
 
-# ╔═╡ 7a6203b9-5bff-5ccc-aeb0-342f55fdb2ca
-let err = cloud_error(BEST_GAUSSIAN, TEST)
-    Markdown.parse("""
-    The rows for ``x_1``, ``x_2`` and the output carry the signal, in the two used units. Below them, the distractor rows of those two units glow faintly, weight after weight, and that faint glow, $(zero_bill(BEST_GAUSSIAN).count) times over, is most of the bill.
+# ╔═╡ 280abba4-d2a3-53de-bc26-154763b473f5
+Markdown.parse("""
+The rows for ``x_1``, ``x_2`` and the output carry the signal, in the two used units. Below them, the distractor rows of those two units glow faintly, weight after weight, and that faint glow, $(zero_bill(BEST_GAUSSIAN).count) times over, is most of the bill. The zeros also cost accuracy: they are held only as tightly as the budget allows, and their leftover noise leaks into the output, which is why the test error, $(fixed(cloud_error(BEST_GAUSSIAN, TEST), 3)), sits above the floor of $(fixed(FLOOR, 3)).
 
-    The test error shows the same strain. The zeros are held only as tightly as the budget allows, and their leftover noise leaks into the output. That is why the error, $(fixed(err, 3)), sits above the noise floor of $(fixed(NOISE^2 / var(TEST.y), 3)).
+The trouble is the prior, not the network. One Gaussian must cover the weights near 2 and the weights at 0 with a single width, and it can't be narrow for the zeros without being narrow for the rest. The paper saw this coming (§6.1): "no single Gaussian prior can provide a good model of a spike around 0 and a spike around 1."
+""")
 
-    The trouble is the prior, not the network. One Gaussian must cover the weights near 2 and the weights at 0 with a single width, and it can't be narrow for the zeros without being narrow for the rest. The paper saw this coming (§6.1): "no single Gaussian prior can provide a good model of a spike around 0 and a spike around 1."
-
-    What does a code that says "zero" cheaply buy?
-    """)
-end
-
-# ╔═╡ 9ec4294b-c109-5b6f-888d-360434d84c17
-let g = BEST_GAUSSIAN, θ = BEST_SLAB
-    dg, d = description(g, TRAIN), description(θ, TRAIN)
+# ╔═╡ ccb5fc61-c16c-5237-b9de-a764149d50a5
+let g = BEST_GAUSSIAN, θ = BEST_MIXTURE
+    lg, l = ledger(g, TRAIN), ledger(θ, TRAIN)
     zg, z = zero_bill(g), zero_bill(θ)
     σs, πs = exp.(θ.prior.log_σ), shares(θ.prior)
     spike = argmin(σs)
     each(z) = "$(fixed(z.low, 2))–$(fixed(z.high, 2))"
     Markdown.parse("""
-    The shortest start learns a spike of width $(fixed(σs[spike], 3)), holding $(round(Int, 100 * πs[spike]))% of the weights, and a slab of width $(fixed(σs[3 - spike], 2)) for the rest. Side by side with one Gaussian:
+    The best start learns a spike of width $(fixed(σs[spike], 3)), holding $(round(Int, 100 * πs[spike]))% of the weights, and a wide component of width $(fixed(σs[3 - spike], 2)) for the rest. Side by side with one Gaussian, in bits against no network:
 
-    | | one Gaussian | spike and slab |
+    | | one Gaussian | mixture of Gaussians |
     |:--|--:|--:|
-    | each zero (bits) | $(each(zg)) | $(each(z)) |
+    | each zero | $(each(zg)) | $(each(z)) |
     | all $(z.count) zeros | $(fixed(zg.total)) | $(fixed(z.total)) |
-    | weights, in all | $(fixed(dg.weight)) | $(fixed(d.weight)) |
-    | error | $(fixed(dg.error)) | $(fixed(d.error)) |
-    | description | $(fixed(dg.total)) | $(fixed(d.total)) |
+    | spent on the weights | $(fixed(lg.spent)) | $(fixed(l.spent)) |
+    | saved on the misfits | $(fixed(lg.saved)) | $(fixed(l.saved)) |
+    | net saving | $(fixed(lg.net)) | $(fixed(l.net)) |
     | relative test error | $(fixed(cloud_error(g, TEST), 3)) | $(fixed(cloud_error(θ, TEST), 3)) |
 
-    With no network, the targets cost $(fixed(no_network(TRAIN))) bits. A zero now costs a fraction of a bit, the description is $(fixed(dg.total - d.total)) bits shorter, and the test error is down to the noise floor, $(fixed(NOISE^2 / var(TEST.y), 3)).
+    A zero now costs a fraction of a bit. The mixture spends $(round(Int, 100 * l.spent / lg.spent))% as much on its weights and saves more on the misfits, and its test error is next to the truth's own, $(fixed(FLOOR, 3)). The ledger and the claim agree again: the weights cost much less than they save, and the network generalizes nearly as well as the truth.
 
     The bill, on the same scale as before:
     """)
 end
 
-# ╔═╡ 963e4ffc-9c2e-5296-814b-b4b7290e3c7b
-let θ = BEST_SLAB, keep = abs.(BEST_SLAB.μ) .>= widths(BEST_SLAB), z = zero_bill(BEST_SLAB), zg = zero_bill(BEST_GAUSSIAN)
+# ╔═╡ 0dedf7d3-174f-567c-a37f-f461d954ff28
+let z = zero_bill(BEST_MIXTURE), zg = zero_bill(BEST_GAUSSIAN)
     Markdown.parse("""
-    The mean prediction is the truth. The spread shows what the network is unsure of: exactly where the two ridges' edges fall, not the plateaus between them. A single set of weights can't draw that picture; a cloud of them can.
+    The distractor rows have gone dark, but not because their clouds are wide. They are about $(fixed(z.width, 3)) wide: as narrow as the spike, and narrower than under one Gaussian ($(fixed(zg.width, 3))). They are cheap because they look like the prior, as the KL formula said. A prior that expects most weights to be almost exactly 0 makes an exact 0 nearly free.
 
-    The network can also be pruned. Drop every weight whose cloud is wider than its distance from 0, ``\\sigma > |\\mu|``, and $(count(keep)) of $(length(keep)) weights survive. The test error stays at $(fixed(relative_error(predict(θ.μ .* keep, TEST.x), TEST), 3)).
-
-    One correction to the story so far. "Imprecise weights are cheap" suggests that the distractor weights must be the wide ones. They aren't. Their clouds are about $(fixed(z.width, 3)) wide: as narrow as the spike, and narrower than under one Gaussian ($(fixed(zg.width, 3))). They are cheap because they match the prior. A weight's bits count how much the data narrows it *relative to the prior*, and a prior that expects most weights to be almost exactly 0 makes an exact 0 nearly free.
-
-    From different starts, training lands in different places. What does keeping the shortest buy?
+    And the network on the plane, its prediction averaged over draws of the weights, beside the truth:
     """)
 end
 
-# ╔═╡ 98a010a3-3084-53c3-a977-3b0dbadc5c27
-let z = zero_bill(BEST_GAUSSIAN)
+# ╔═╡ be298eb2-41b5-5448-9b78-c0f3e0d252c3
+let decay = relative_error(predict(DECAY.net, TEST.x), TEST)
     Markdown.parse("""
-    ---
+    ## Looking back
 
-    This notebook began with a knob that held every bit of its string. A network's weights are knobs too, and their bits are set the same way: by how precisely the data pins each one down, measured against the prior.
+    The paper claimed that a network generalizes when its weights hold much less information than its targets, so it should be trained on the expected squared error plus the information in its weights.
 
-    Weight decay prices a weight's value. Noisy weights price its precision, and bits back turns that price into a KL. Trained on misfit plus KL, a network with one Gaussian prior finds the truth among the distractors, but pays $(fixed(z.low)) bits or more for every zero. A spike and slab says zero almost for free, and its shortest description is the truth. With scarce data, the search gives out before MDL does.
+    On our task, the claim held. Trained on that loss, with nothing held out, the network beat weight decay tuned by cross-validation: $(fixed(cloud_error(BEST_GAUSSIAN, TEST), 3)) with one Gaussian, and $(fixed(cloud_error(BEST_MIXTURE, TEST), 3)) with a mixture of Gaussians, against $(fixed(decay, 3)). The networks whose weights saved the most beyond their cost generalized best, and on pure noise the loss sent nothing. How much a network saves depends on the prior it is coded with: one Gaussian paid $(fixed(zero_bill(BEST_GAUSSIAN).low)) bits or more for every zero, and a mixture of Gaussians said zero almost for free. With scarce data, the search gave out before MDL did.
 
-    Notebook 03 left a twist to carry along: Blier and Ollivier found that variational codes, the descendants of this paper, give "surprisingly poor" bounds on deep networks. Even at $(length(BEST_SLAB.μ)) weights, ours needed the right prior, a warm-up, and restarts, and at 30 cases a good code existed that training couldn't find.
-
-    The next item, Shane Legg's *Machine Super Intelligence*, asks what the right prior is, if not one we chose. Solomonoff's answer weighs every computable hypothesis by ``2^{-K}``: notebook 02's complexity, back as a prior.
+    Here is every network in this notebook on the plane, each titled with its relative test error:
     """)
 end
 
-# ╔═╡ e0666303-0dc9-532a-9ecd-7854d0f39152
+# ╔═╡ b845009d-ef89-598a-a612-39e96be14606
 # One colour scale for both bills.
-BITS_LIMIT = maximum(maximum ∘ bit_table, (BEST_GAUSSIAN, BEST_SLAB))
+BITS_LIMIT = maximum(maximum ∘ bit_table, (BEST_GAUSSIAN, BEST_MIXTURE))
 
-# ╔═╡ a77665fc-e49c-5902-bdf7-2a784f629d9f
+# ╔═╡ adf3104b-6068-5973-a5c9-c8b315f1fcd8
 "Bits per weight as a heatmap: hidden units across, inputs down."
 function bits_chart(table, title)
     with_theme(THEME) do
-        fig = Figure(size = (560, 600))
+        fig = Figure(size = (470, 500))
         ax = Axis(fig[1, 1]; title, xlabel = "hidden unit", yreversed = true, xticks = 1:HIDDEN,
                   yticks = (1:length(ROW_NAMES), ROW_NAMES), yticklabelsize = 10)
         hm = heatmap!(ax, 1:HIDDEN, 1:length(ROW_NAMES), table; colormap = SEQUENTIAL, colorrange = (0, BITS_LIMIT))
@@ -1172,11 +1126,11 @@ function bits_chart(table, title)
     end
 end
 
-# ╔═╡ 909a59e6-7f4e-5fa6-8246-5da5d7de67bc
+# ╔═╡ 895efa0c-63f2-561e-abd4-19742c36dc32
 bits_chart(bit_table(BEST_GAUSSIAN), "One Gaussian: bits per weight")
 
-# ╔═╡ 713450b6-8c8c-53bc-8e74-e8bde40fd76f
-bits_chart(bit_table(BEST_SLAB), "Spike and slab: bits per weight")
+# ╔═╡ ee7073ef-2ccc-585b-be04-b6ea7a6c4c61
+bits_chart(bit_table(BEST_MIXTURE), "Mixture of Gaussians: bits per weight")
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -3769,152 +3723,142 @@ uuid = "23338594-aafe-5451-b93e-139f81909106"
 """
 
 # ╔═╡ Cell order:
-# ╟─c2648369-7931-5a78-afb0-db9249fc9bda
-# ╠═dfe5ed49-06f1-5315-9b81-f1599d064b8c
-# ╟─135ef253-1443-5fe2-b2a3-2101e64f3fba
-# ╟─445d8293-b923-5657-9c21-1d7df0914065
-# ╟─df7650fa-1790-5eaf-90c3-4b4e28c87a46
-# ╟─954a118b-a672-401b-b54b-ac576d288ca3
-# ╠═8ea8e777-cb1f-4fc6-aef2-4ffad017cada
-# ╠═73671fe1-beb4-4072-beb5-4357979693a0
-# ╠═62028fa1-9edb-4af9-9983-309f693e1032
-# ╟─8a9c713a-4583-489d-b29a-7fb4ede3855a
-# ╟─04902c85-4a28-5dce-9b89-1104fab650e2
-# ╠═573b535f-139a-5bb6-ab43-30c1b5e4337d
-# ╠═99666431-9067-5717-8270-e855cad7e227
-# ╠═80414ab6-410c-5613-9467-c0f35c9ef968
-# ╟─132385a2-9235-5ea3-baef-e7a6827ae7b9
-# ╟─86b2edb7-6a2c-5ab5-b6b6-605a2205c73e
-# ╟─f36af0ee-7360-515a-bb55-eec5e006c286
-# ╟─7355c21d-72c4-59d4-bec8-56feab68595a
-# ╟─99102c8a-1313-54cd-a6c0-7037fa16b1cb
-# ╠═1fc2051d-6347-5131-a5fc-ab549861724b
-# ╟─cab900cd-0c95-5cb6-b496-5972e972e948
-# ╟─1da8e658-e978-54b6-bde9-992485fbc7e6
-# ╠═7389031b-6d3c-5518-9d1a-3b219ab09d7a
-# ╠═7cd2b515-5909-5386-bf7f-2a57d533348d
-# ╠═eaf5a06f-42e6-5b36-9fa0-d6e7f23f3bc7
-# ╠═e5d3a282-4dee-513d-aec8-8116ea1e1155
-# ╠═3a7aa754-ec7f-54d3-acdd-9f6a48933a86
-# ╠═af0c7a72-67cb-523d-91e8-c5ea35af6903
-# ╠═d2a69541-91e2-5f1e-8ed0-7387e721c733
-# ╠═21731057-61ac-5169-9b2f-294492ea5c4f
-# ╟─88975436-c175-5335-943e-956afea92d61
-# ╠═324c62a1-7687-53e3-90dc-4966ca29c443
-# ╠═e22a7e39-e2a8-5674-8e04-ba0d0ae65b24
-# ╠═1ed93071-dd7d-557e-8cab-39afacd7bf73
-# ╠═32130f1b-6ab3-5a41-aa57-0dbaa4aebcaf
-# ╠═c1ea2a1a-8c7d-5a19-b8a6-5a65bc667056
-# ╠═99b251a7-0999-5d5a-8e30-24ae5d4269a7
-# ╟─4487a7bf-aa25-5c18-9d66-1541be0660aa
-# ╟─6e7448f1-cbab-50cb-8bb6-467dc8e6b9a1
-# ╠═aa0acb05-6cf6-5110-a640-43c32dc3c376
-# ╠═d028f6a9-8c13-5900-8843-c884676a52ff
-# ╠═cd86a994-1a5e-5348-b7a2-a3005ec2002b
-# ╠═163d85c8-1728-590c-93ef-4f2a382ae034
-# ╠═3d341cd9-ef40-5706-a347-b843588943d4
-# ╟─bd2f5c38-a64a-5620-be68-c0d6dccf00ab
-# ╠═8684b3bc-c401-53be-b945-9a500d58bc64
-# ╠═13f3cae4-42a6-5a41-9551-35edb66f09cb
-# ╠═bb999611-d12b-59f2-ae66-66a27d2ed036
-# ╠═eacce216-0d0c-5fe6-b9f3-cf4e8baf2964
-# ╠═b63b5905-5c4e-55c8-8d13-476e5ab903f6
-# ╟─6232a001-e615-5a52-8996-e077cc07b962
-# ╟─a6543692-b681-5b35-b21b-14b8d0bca235
-# ╟─e1fc2b21-4fd5-5e3a-aad8-09347f70d54b
-# ╠═66a12152-3c15-535a-8234-d95dc5f9cfd5
-# ╠═61cb553f-6662-5c3a-9e03-33ca3caddcf6
-# ╠═55e4a16a-716d-5688-8de2-a1b1ee2c1a04
-# ╠═847e1840-6cab-53a2-a3eb-0cac0a45be59
-# ╠═ba806ec6-e932-541d-838e-8a8a5858e770
-# ╟─6a926537-5474-5612-bd09-2706dfad6b18
-# ╠═b492e048-6dad-5967-b662-8367adbd5020
-# ╟─c8c879b4-9e50-5fa3-ac9c-74489dbfe824
-# ╟─19239ab2-b80e-5555-95b0-b27268132f3b
-# ╟─232e4c3a-06ae-51be-9024-ead38fd2628c
-# ╟─49b4ce24-4faf-4e50-946b-af3a2bae798a
-# ╠═8bc7f4aa-d1fe-4542-a6ce-dae1af790894
-# ╠═4d3b2ad6-14c5-4c9a-a128-05c46cf04c35
-# ╟─3ba21950-72af-475c-881b-e95857fdb55f
-# ╟─f7c15090-cde7-5eee-b79d-bbf97ec5b481
-# ╠═e2ef921b-a032-560f-b2c2-f1c217a87d3d
-# ╠═d40b8fc3-f248-5df9-97a4-8e721aea88fd
-# ╟─c63f4c7b-6c22-53d2-b6fe-52853ffce99c
-# ╟─580d60f3-b6c7-584d-b57f-a3dc2e0e68f7
-# ╟─f19ed824-417e-5324-9c63-6b403fd15cfb
-# ╟─b4b9a597-144e-5452-8f47-9be26f4ac9a6
-# ╟─909a59e6-7f4e-5fa6-8246-5da5d7de67bc
-# ╟─7a6203b9-5bff-5ccc-aeb0-342f55fdb2ca
-# ╟─ac5ad65b-bed9-5f24-9629-0b8d2ab9cdbd
-# ╠═e611b95b-9546-5c86-982c-d9d38c8834e0
-# ╠═238d7d24-9b2f-5db6-bc41-9486e80c8696
-# ╠═dd230776-5525-5edf-9132-c52bae2d840d
-# ╠═8c0255cd-505b-5140-927f-c94d49a83f6c
-# ╠═79f20810-8d56-5efb-82b9-af0e325a1008
-# ╟─b222534d-14a0-5687-aced-ce338c35ed12
-# ╠═96e84353-2638-54d2-ba84-c1d37f349a48
-# ╠═8bfaab5c-8582-58b1-84f9-f1eaf436d25d
-# ╟─9ec4294b-c109-5b6f-888d-360434d84c17
-# ╟─713450b6-8c8c-53bc-8e74-e8bde40fd76f
-# ╟─e7882799-942c-5e76-8f20-aa8ad279f8d5
-# ╟─7ec892ba-6cec-5026-beca-ff300dae9982
-# ╟─963e4ffc-9c2e-5296-814b-b4b7290e3c7b
-# ╟─759432e5-0238-5b32-a2fa-7d49d4bd5638
-# ╟─83be2aaa-be46-5f52-b953-caebd8f0f3c3
-# ╟─0ceceac7-724a-5e07-80e0-715bfac800a5
-# ╟─77afafbd-8e9a-545e-a4d0-9f06f7b1cc54
-# ╠═76fb678b-6028-55e7-8c02-8b711ea3b42a
-# ╠═ae2219df-ba07-52f7-bab7-50e6f653af4a
-# ╠═dd8b178a-edca-564d-847b-b5eafc12076c
-# ╟─779904d4-e1a5-584d-9905-686ce66b7968
-# ╟─cb22c96a-7891-530e-b5d3-1959ca8b923e
-# ╟─933bcc4a-1b91-50f0-9c70-0caa71c0abab
-# ╟─1f7d138d-870a-5aaf-905c-563e66698403
-# ╠═18483c2a-7563-5a8a-834c-b8ba5fc25c62
-# ╟─a60c3b9e-7b38-59ee-bc9a-73fc57ec8254
-# ╠═7fc8bd6f-80a6-539c-8da8-0f67219a7358
-# ╠═1e788fbd-3fac-5193-8b30-cbfc2030d2dc
-# ╠═7b4ce275-0d03-5c5f-bf6c-d93bc9ace736
-# ╟─6e770c8f-ee22-5763-b7a0-6ac4d0a829ed
-# ╠═72bf4b43-c4f7-526d-aace-4cdeee55c7dc
-# ╠═6c6bc05e-2d98-55da-bedb-8218e335ae46
-# ╟─a19db1e5-39d5-59f0-aff3-fd5ffe477b07
-# ╟─98a010a3-3084-53c3-a977-3b0dbadc5c27
-# ╟─0da56f56-f121-552e-925b-74e59cf792ba
-# ╠═4853009c-f381-5e67-aadf-5e11a18ba45b
-# ╠═1d6c0194-bafa-5856-a326-0f0e7f2d6836
-# ╠═559a6c6a-c255-5147-8891-f2fb30993a41
-# ╠═60cefa68-d30c-53e6-987c-bfb142d2fd73
-# ╠═73e62e19-f7e4-54e3-b311-979ecb4fb108
-# ╠═161ba9b4-5ad8-5db5-8283-60b41fd7c913
-# ╠═185b3cf4-322d-55b3-90af-62d530d57bcf
-# ╠═78432c2a-7e73-54b5-81ad-dd74f17a2146
-# ╠═d007987b-13ad-5229-8f71-d778be11fe58
-# ╠═701c6429-f4a4-5e65-a4de-db02e32251c4
-# ╠═7bbcb97c-6846-5d1f-b52e-77a9b26028b7
-# ╠═04e2518c-4c92-5aaf-b459-a2e50c6821e6
-# ╠═4c908bb4-0cdb-5fe1-af2d-bbc501f4b8e7
-# ╠═7d8ca2f2-6fb6-5e0d-afda-5e1551f0b9ae
-# ╠═f6198bc5-2cab-5929-891d-9fd3dbfb5e9e
-# ╠═dfb48298-7453-515b-b0be-7ceb0c9ecec1
-# ╠═aa41fdda-d1b2-5c1d-ba62-41376ff121d7
-# ╠═18920dea-0a3a-5dad-97f4-59275b852e9d
-# ╠═69a98789-05be-57d3-998d-023c8886d065
-# ╠═34b8cc2c-21c6-5535-914b-eee938917549
-# ╠═993b0551-9828-5b72-9989-f59a0ed92e6a
-# ╠═af751974-a597-5c7a-b189-d13e3c494d71
-# ╠═85f45203-2058-5d40-b0d6-f102ecd76a65
-# ╠═0dc32d55-1ff5-562c-90f5-ae33a1567ec2
-# ╠═ecb5cbfa-1f14-5177-a210-fd647c77cf68
-# ╠═2b72bbbb-474a-5c55-aaab-f5f6b614e77d
-# ╠═cf66fedc-69f2-5fed-b3d4-b7439ea262f8
-# ╠═9faedece-781f-5980-ac9b-aacc3d58b535
-# ╠═94e6d0e8-2003-56d7-96e6-de07aee2b290
-# ╠═a148da85-e9a4-5b1d-bbaa-f189b248a448
-# ╠═f25e0fee-da63-581f-b9e2-6ad6a3689027
-# ╠═5612202f-f037-54e8-bda8-877298356e5e
-# ╠═4c4d661a-1cfd-5dfc-9aae-7a593757603f
-# ╠═e0666303-0dc9-532a-9ecd-7854d0f39152
-# ╠═a77665fc-e49c-5902-bdf7-2a784f629d9f
+# ╟─b3dce1ff-f7f7-5a3b-97e3-a19f8dcaca7a
+# ╠═65cc8b96-25fe-5676-aac0-d4715c84314e
+# ╟─ca4d9ebf-335b-573f-8a78-32072021bcc1
+# ╟─0e7627a5-f61c-5b54-a1ad-df392620ffb1
+# ╠═73b6b9b6-1ba8-5d35-a029-3329024fbf64
+# ╠═32501cfd-cdf6-5491-98be-191229948e55
+# ╠═b14d1afc-72b0-5118-bdab-1944df3afb78
+# ╟─4ab48f39-82fd-5a3b-8c65-160eb701dc29
+# ╟─2d3bba55-ba86-57a8-a905-659e57b6bb77
+# ╠═0e2eeebd-951a-5eea-b995-04fd66b688dd
+# ╠═883df49d-a6a1-5194-b5e5-90c916d52d50
+# ╠═e6b75c28-b9ba-5ee8-a231-a6fca1845bef
+# ╠═0a7ef374-adca-5b9b-8159-1f85b9197338
+# ╟─947ec45d-2a0e-545e-8c2c-9d41313272af
+# ╟─4d023645-bc11-59f7-a488-3169674ff70d
+# ╟─ce3d4e6b-baa9-4627-8cb7-7d262ff86f52
+# ╠═f0cc85b0-16f3-5503-b720-3983d7094b28
+# ╠═fcb787e3-5f33-57a4-a550-fd6e5f3ddf17
+# ╠═d62c9d9b-80f5-5977-90a7-8915a360dd90
+# ╠═25420e04-b36b-5938-8fd7-472bead269bc
+# ╠═71c1f97f-0824-5767-8a69-03e6955c0682
+# ╟─5e8b963b-a5d0-536a-b53f-968e33d67bae
+# ╠═c5f39cf6-2893-5993-9e5b-30cc55ea7bab
+# ╠═09eabb3f-704e-59e6-b54d-505eeeb7d0e4
+# ╟─837af198-c6af-58f0-be18-50d0030689c8
+# ╠═5a4add4f-3828-5aca-b76c-3960b85c880d
+# ╠═92788641-8d09-5fd1-b9c2-4c7e1c087ec3
+# ╟─74a4508b-259f-541d-ba00-7aff49ee6f0f
+# ╟─07e1afbe-1435-5366-a807-d9d8c1976008
+# ╟─75189faf-163a-5b1a-87be-a6743c1e23b3
+# ╠═9ccc1f86-94c6-534c-bd09-cad1de2d352c
+# ╠═364ba16a-24b2-5296-a9f2-dbc60240312f
+# ╟─ce58e9b6-6f20-5b53-a16c-d43e0eb26801
+# ╟─eccb9cb7-c861-5a93-a115-86f10262b9ec
+# ╟─149bdecd-7728-58b7-b78e-d9f7d1e2871c
+# ╟─b05932cc-c7d9-5410-b7f2-b053cfeb4326
+# ╠═74aab869-7574-5319-9f4a-4d2db701db61
+# ╠═2456446b-4992-5de2-b992-547ad8a1f182
+# ╟─d4d41340-f72a-59de-953f-566e994be2e4
+# ╠═645418b5-949a-549b-a139-473f5f0dc1bf
+# ╟─4a8c2ead-7277-50d5-a17a-08aa9fff050e
+# ╟─5595ab9e-5cb7-55d0-a5fc-78ce8b192ad9
+# ╟─920e0d51-2a08-5c5c-b6f2-b55bb9e7c2a3
+# ╟─4f2d3cd5-aa6a-55c2-b701-d6eb03f48907
+# ╠═9a217e44-1307-51a8-97b1-2473236dfb1d
+# ╟─34ac9ced-0eac-5cd2-b82a-6ea260a10ae7
+# ╟─6094aea6-a49a-5994-af61-7fa4253be3cd
+# ╠═13dc376e-9c80-51b8-ad55-43405a0bede7
+# ╠═b2bf51b2-ec1d-5779-b33f-ab29f6252e3e
+# ╠═b5a144de-7e9c-5e59-8d36-eeaca5979795
+# ╠═6a142169-be9c-551e-971d-f119bd744a7d
+# ╠═5f9babdd-3f19-5094-a970-b54c312a128b
+# ╠═a2229ad1-11aa-5e0d-b9f3-d610980e2b65
+# ╠═a9143211-6207-5f4f-8b09-b97a06ef55b3
+# ╠═e6407394-aa39-5a0b-96c5-2fa925bfa5d8
+# ╟─01b6047a-9102-5935-8aa1-81fd0a989d99
+# ╠═e5095ad0-2394-593c-842a-4c187bbc910f
+# ╠═eac8d019-c638-5190-8e50-de49099a5c27
+# ╠═5deb2101-b3e8-50d5-b539-def1b355aa30
+# ╠═dd526d59-4939-5057-b7f7-033238d6c653
+# ╟─c73bfdc7-f9d3-5945-acf1-dfdaca253077
+# ╠═034f774e-317b-5b32-a608-d5a2772d5815
+# ╠═604db986-57ab-5229-991d-1ed52f386a91
+# ╠═6d5d8243-2bc8-5aa5-ac36-a5d9bb3ec05d
+# ╠═88329ada-a959-5972-b1fe-a4f2f402a6d2
+# ╟─d98a33f9-22fb-5a73-86d1-e560e7cf3ac7
+# ╟─d1c1a326-d00d-5bfd-a564-a4ffb65134cd
+# ╟─3a71b0d9-be6c-54b8-9e0d-eae5dfa59dad
+# ╠═1e5e51eb-80ec-536a-859c-ce087491ce9c
+# ╠═59a6369d-a0f2-5e2d-86db-1f19fdf4181f
+# ╟─22127acf-0b2e-5b6e-ba2e-d39e003c78ee
+# ╟─eeb4827a-f390-5f76-8556-b2aeb465afba
+# ╟─df7eb95a-cb0d-56ce-85d8-09b582fc2d9f
+# ╟─11bdb645-bcf7-5c15-a5c6-2b943b4027a8
+# ╟─5f01405a-c452-5604-8424-569e5925454b
+# ╟─4cd46967-e9fc-5a51-b092-7325a7abf661
+# ╠═fcdbe5e8-df07-5650-89fe-622dfd3f217f
+# ╟─a506b9d7-5a85-549a-bd26-76c9fa947a09
+# ╟─009641e7-3f55-55bd-969d-c7bb9d207c8a
+# ╟─103fd665-1073-5fd8-9c20-3a82f23ca479
+# ╟─895efa0c-63f2-561e-abd4-19742c36dc32
+# ╟─280abba4-d2a3-53de-bc26-154763b473f5
+# ╟─8d48e436-8617-534e-a7e8-495c71f148b7
+# ╠═14931e07-d199-5611-84ca-0a515a39903c
+# ╠═781d8d49-01ea-5211-9ecd-a4a0e064c0c8
+# ╠═ee6e09f2-2151-5238-8cf9-7cbff70d5d2f
+# ╠═fafc485f-3338-581b-b8ad-5cfd2bd5a055
+# ╟─80a53f12-49fd-556b-bd19-0a3e6bc35079
+# ╠═0f928b74-c921-5f8d-a473-00dbe725af3a
+# ╠═94cf7183-2d9e-5667-aef3-e328987831d8
+# ╟─ccb5fc61-c16c-5237-b9de-a764149d50a5
+# ╟─ee7073ef-2ccc-585b-be04-b6ea7a6c4c61
+# ╟─0dedf7d3-174f-567c-a37f-f461d954ff28
+# ╟─e20c620c-1bb9-5b36-a2b6-6e5b90de84ac
+# ╟─d78a68bb-5df1-5bb6-bdb8-72f4bea340ab
+# ╟─b63350b6-22a5-5904-af65-02b3571cb763
+# ╠═e5c4ba91-0cdd-5ba6-ba9a-eddc7e822f8d
+# ╟─0dcac29e-382b-525a-a70f-6d04979abae5
+# ╠═f95b8975-7eb9-5d1c-86d0-5ee0d19c1178
+# ╠═d4830351-0e00-5b5e-9204-8da9bf420a48
+# ╠═8e55a733-7d7b-53ff-ab1f-b30e93b7dbbd
+# ╠═b5b82864-abe3-5ec4-9b0f-6d18ad2af047
+# ╟─80694af1-403b-57e3-b836-5cff96c5c3e3
+# ╠═37c8db24-5ecc-51b5-9b61-0ae7f40458a0
+# ╠═fb39e911-5cb0-5cc2-ae15-c4563a6f2f45
+# ╟─301dd0cc-6bfa-5964-b6b7-a914f4bb455d
+# ╟─be298eb2-41b5-5448-9b78-c0f3e0d252c3
+# ╟─b0455b32-4928-5765-b48c-74cf5c3cbd78
+# ╟─08c9d2ee-9c4c-57db-ac0b-2e8cc638fd03
+# ╟─1ff92f76-894f-57d4-bfbe-b626480e13cb
+# ╠═3f6cc915-39b8-50cd-9527-64993e41a46b
+# ╠═2aeefb9c-d9f3-5189-9d01-99296749a21b
+# ╠═f7728920-be5f-5993-bc72-bbecbcf07d80
+# ╠═f1ccd75e-bfdc-5ad2-a02b-c468a14eb0fc
+# ╠═077df9e7-ca77-530f-8d6f-931f9e26498c
+# ╠═84aacc97-52cc-5221-978e-874554ea41a3
+# ╠═21f5451d-01bf-567d-982b-4517de423903
+# ╠═6b41f06e-f343-5728-817e-eae08696a8e5
+# ╠═3b314357-4a17-5bde-8170-310d7f2ba3ee
+# ╠═0d0339c0-c1ab-5f51-8b5b-e72219150fe7
+# ╠═fc1f13fd-db8c-514a-bbc7-a9234145f6d5
+# ╠═3f895d6d-2c7a-58c1-924a-ae9830aca097
+# ╠═cec8f3c9-b875-5e81-aa2c-df88ac7ae07a
+# ╠═7afb28ea-f81f-5845-9893-09bd63657b65
+# ╠═8ce757c7-3507-5b82-9b64-31a218a2b79b
+# ╠═04b5296d-d362-5623-9a88-448c87f1f18d
+# ╠═386a3f78-ce6a-5434-ab8b-e9fa428aa9a5
+# ╠═f85c9643-35bd-5663-9f04-bab99f8d2154
+# ╠═a1887041-35ed-5e9e-a653-25fcc1935d40
+# ╠═d3f55395-d4ae-5450-9b7d-901134745ecb
+# ╠═12dfbff1-23b7-5764-9f3b-c011780ccd70
+# ╠═387c10aa-faf0-5008-8cfc-9c96abd00ff1
+# ╠═77df1761-4ebb-5a61-ae36-121f3b299699
+# ╠═9afeec6e-205b-5197-b586-6b5cab85d54f
+# ╠═54337ec5-d8f6-5ad1-a077-6c1e1ded0573
+# ╠═b845009d-ef89-598a-a612-39e96be14606
+# ╠═adf3104b-6068-5973-a5c9-c8b315f1fcd8
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
