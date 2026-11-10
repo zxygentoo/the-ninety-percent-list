@@ -53,3 +53,12 @@ julia --project=scripts scripts/export.jl                    # writes site/
 ```
 
 The export runs every notebook in a fresh Pluto session and never writes the notebook files. It exits with an error that names any notebook with errored cells.
+
+## Julia version
+
+Julia is pinned to **1.13.3** in two places, and they must stay in sync:
+
+- locally, by a juliaup override on this directory (`juliaup override set 1.13.3`), so start Julia and Pluto from here;
+- in CI, by `version` in `.github/workflows/pages.yml`, which builds the published pages.
+
+Julia doesn't promise the same random numbers across versions, so a different version can change every dataset and every number a notebook prints. To upgrade, bump both together, rerun the export, and re-check any prose written against specific results.

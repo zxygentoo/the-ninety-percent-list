@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
         with:
-          version: "1.13"
+          version: "1.13.3"    # keep in sync with the local juliaup override; see AGENTS.md
       - uses: julia-actions/cache@v2
       - name: Cache downloaded texts
         uses: actions/cache@v4
