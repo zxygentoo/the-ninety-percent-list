@@ -51,7 +51,7 @@ md"""
 
 Notebook 03 priced a model by its fit plus its COMP. COMP looks past the data at hand to every dataset the model could have been handed, gives each one its best fit, and adds up the probabilities those fits assign. The total is above 1, since every dataset picked its own fit, and COMP is that overspend, in bits.
 
-A neural network is a model too. What would COMP say about one?
+A network of a given shape is a model too, and each setting of its weights is a member. What would COMP say about one?
 
 ### Too many datasets
 
@@ -229,6 +229,8 @@ So the best width is the root-mean-square misfit. Put it back, and the first ter
 ```
 
 Only the mean squared error depends on the network. Halve the misfits, and each one costs a bit less.
+
+The code works in *nats*, the unit of natural logarithms: 1 nat is ``\log_2 e \approx 1.44`` bits, and `bits` converts.
 """
 
 # ╔═╡ 74aab869-7574-5319-9f4a-4d2db701db61
@@ -250,7 +252,13 @@ md"""
 
 [*Weight decay*](https://papers.nips.cc/paper/1991/hash/8eefcfdf5990e441f0fb6f3fad709e21-Abstract.html) was the standard remedy for an overfitting network, and it is still in use. Add a penalty on the squared weights to the training loss, ``\lambda \sum w^2``. Its gradient, ``2\lambda w``, shrinks every weight by a small fixed fraction at every step, so a weight decays toward 0 unless the data keep pushing it back. The strength ``\lambda`` is a knob, usually tuned by trying values on held-out data. It is the method the paper sets out to beat.
 
-The paper's first move is to show that weight decay is already MDL (§4). Send the weights the same way as the misfits, under a Gaussian *prior* of width ``\sigma_w`` centred on 0, and they cost ``\tfrac{\log_2 e}{2\sigma_w^2}\sum w^2`` bits, plus terms that don't depend on the weights. Add the two parts, and the bill is the summed squared error plus a penalty on the squared weights: weight decay, with its strength set by the two widths, ``\lambda = s^2 / \sigma_w^2``.
+The paper's first move is to show that weight decay is already MDL (§4). Send the weights the same way as the misfits, under a *prior*, a distribution agreed on before any data is seen: a Gaussian of width ``\sigma_P`` centred on 0. They cost ``\tfrac{\log_2 e}{2\sigma_P^2}\sum w^2`` bits, plus terms that don't depend on the weights. Add the two parts, and take out the misfits' factor:
+
+```math
+\frac{\log_2 e}{2s^2}\sum_c r_c^2 + \frac{\log_2 e}{2\sigma_P^2}\sum w^2 \;=\; \frac{\log_2 e}{2s^2}\Big[\sum_c r_c^2 + \frac{s^2}{\sigma_P^2}\sum w^2\Big] .
+```
+
+The bracket is the summed squared error plus a penalty on the squared weights: weight decay, with its strength set by the two widths, ``\lambda = s^2 / \sigma_P^2``.
 
 So weight decay was a description length all along, and its knob is a ratio of two code widths. The paper reads weight decay's success as "a vindication of this crude MDL approach".
 
@@ -258,7 +266,7 @@ But what makes it crude?
 
 Go back to the bin. A weight ``w``, sent under a prior ``P``, costs ``-\log_2 P(w)`` for the height and ``\log_2(1/t)`` for the width. Weight decay charges for the first and fixes the second: every weight is sent to the same tolerance, fine enough for the most sensitive one.
 
-That wastes bits wherever a weight could be sent coarsely. A weight that can move by 0.5 without changing the network's output needs only a coarse bin; a weight that matters to the fourth decimal needs a fine one. The paper calls ignoring the difference "a terrible waste of bits" (§4).
+That wastes bits wherever a weight could be sent coarsely. A weight that can move by 0.5 without changing the network's output needs only a coarse bin; a weight that matters to the fourth decimal needs a fine one. The paper calls ignoring the difference "a terrible waste of bits" (§4). The waste also hides a choice: with the same tax on every network, the bill can never prefer one whose weights may be sent coarsely over one that needs every weight exact.
 
 How can each weight choose its own precision?
 """
@@ -279,7 +287,9 @@ How do you send a cloud? The sender picks one point from it at random, ``w \sim 
 
 and with a fine ``t`` it is a lot.
 
-Then comes a refund (§5.2). Once the receiver has the weights and the misfits, they have the targets, so they can rerun the sender's training and arrive at the same cloud ``Q``. Knowing the cloud and the point, they can work out the random bits the sender used to pick the point. The sender didn't need real coin flips for that. They could use the first bits of some other message they owe the receiver anyway, and the receiver reads that message back off the point, a trick since built into [working compressors](https://arxiv.org/abs/1901.04866). Those bits were delivered, so they come off the bill. Picking a bin of width ``t`` from ``Q`` takes
+Then comes a refund (§5.2). Once the receiver has the weights and the misfits, they have the targets, so they can rerun the sender's training, random seeds and all, and arrive at the same cloud ``Q``. Knowing the cloud and the point, they can work out the random bits the sender used to pick the point. The sender didn't need real coin flips for that. They could use the first bits of some other message they owe the receiver anyway, and the receiver reads that message back off the point, a trick since built into [working compressors](https://arxiv.org/abs/1901.04866). Those bits were delivered, so they come off the bill.
+
+How many are there? Picking an outcome of probability ``p`` takes about ``-\log_2 p`` fair coin flips, as many as sending it would: feed coin flips to the decoder of notebook 03's arithmetic coder, and out comes a sample. A bin of width ``t`` has probability ``t\,Q(w)`` under the cloud, so picking it takes
 
 ```math
 \text{refund} = -\log_2\big(t\,Q(w)\big) \quad \text{bits}.
@@ -301,7 +311,7 @@ the [*Kullback–Leibler divergence*](https://en.wikipedia.org/wiki/Kullback%E2%
 
 > Think of an address. The prior is a city, and the cloud is the district where the weight must land. Any house in the district will do, so the house number can spell out part of another message. What the sender really pays for is naming the district: about ``\log_2`` of the city's size over the district's.
 
-For a Gaussian cloud and a Gaussian prior ``\mathcal{N}(0, \sigma_P^2)``, the divergence has a closed form (eq. 9). The paper writes it in *nats*, the unit of natural logarithms (1 nat is ``\log_2 e \approx 1.44`` bits), and so does our code:
+For a Gaussian cloud and a Gaussian prior ``\mathcal{N}(0, \sigma_P^2)``, the divergence has a closed form (eq. 9). The paper writes it in nats, and so does our code:
 
 ```math
 \mathrm{KL}(Q \,\|\, P) \;=\; \log\frac{\sigma_P}{\sigma} \;+\; \frac{\sigma^2 + \mu^2}{2\sigma_P^2} \;-\; \frac12 .
@@ -320,7 +330,7 @@ kl(μ, σ, σₚ) = log(σₚ / σ) + (σ^2 + μ^2) / (2σₚ^2) - 1 / 2
 md"""
 ### The misfits, with noisy weights
 
-The receiver runs the network with the weights it was sent, a random draw from the clouds. So the outputs are random, and so are the misfits. Their squared error, averaged over the draw, splits in two on each case (eq. 12):
+The receiver runs the network with the weights it was sent, a random draw from the clouds. So the outputs are random, and so are the misfits and their bill. As with the weights, what counts is the average over the draw. The squared error, averaged that way, splits in two on each case (eq. 12):
 
 ```math
 \mathbb{E}\big[(d - y)^2\big] = (d - \bar y)^2 + \mathrm{Var}(y) ,
@@ -340,7 +350,7 @@ with the tolerance term left out, and the network is trained on it. The last ter
 
 Widening a cloud shrinks its KL but adds variance to the output; narrowing it does the reverse. Each weight settles where the two balance.
 
-Every choice of clouds gives a code the sender could really use, so the loss is a codelength the sender can achieve. It is not the shortest the prior allows. That would be ``-\log_2 P(\text{targets})``, with the weights averaged over the prior, and the loss reaches it only when ``Q`` is the exact Bayesian posterior over the weights, which a Gaussian per weight is not. So the loss is an upper bound, and training tightens it.
+Every choice of clouds gives a code the sender could really use, so the loss is a codelength the sender can achieve. It is not the shortest the prior allows. That would be ``-\log_2 P(\text{targets})``, with the weights averaged over the prior, and the loss reaches it only when ``Q`` is the exact *posterior*, the prior updated on the targets by Bayes' rule. That can take any shape, and a Gaussian per weight is not it. So the loss is an upper bound, and training tightens it.
 
 > The loss has modern names: it is the negative [*evidence lower bound*](https://en.wikipedia.org/wiki/Evidence_lower_bound) (ELBO), and training a network on it with sampled gradients is *Bayes by Backprop* ([Blundell et al., 2015](https://arxiv.org/abs/1505.05424)), which grew out of [Graves (2011)](https://proceedings.neurips.cc/paper/2011/hash/7eb3c8be3d411e8ebfab08eba5f49632-Abstract.html).
 """
@@ -391,11 +401,11 @@ SAMPLES = 4
 md"""
 ## Testing the claim
 
-The claim has two halves, and our task can test both. Trained on the loss, a network should generalize better than one tuned the usual way, and without holding any data out. And among trained networks, the ones whose weights cost much less than they save should generalize best.
+The claim has two halves, and our task can test both. Trained on the loss, a network should generalize better than one tuned the usual way, and without holding any data out. And among trained networks, the ones with the largest net saving should generalize best.
 
 ### The baseline
 
-The paper compared against weight decay, tuned with held-out data. Try strengths ``\lambda`` from ``10^{-4}`` to 1, score each by 5-fold [cross-validation](https://en.wikipedia.org/wiki/Cross-validation_%28statistics%29) on the training cases, and retrain on all of them with the best. Our ``\lambda`` weighs the penalty against the *mean* squared error rather than the sum, so it is the ratio of widths from above divided by the number of cases, ``\lambda = s^2 / N\sigma_w^2``:
+The paper compared against weight decay, tuned with held-out data. Try strengths ``\lambda`` from ``10^{-4}`` to 1, score each by 5-fold [cross-validation](https://en.wikipedia.org/wiki/Cross-validation_%28statistics%29) on the training cases, and retrain on all of them with the best. Our ``\lambda`` weighs the penalty against the *mean* squared error rather than the sum, so it is the ratio of widths from above divided by the number of cases, ``\lambda = s^2 / N\sigma_P^2``:
 """
 
 # ╔═╡ 604db986-57ab-5229-991d-1ed52f386a91
@@ -615,7 +625,7 @@ BEST_MIXTURE = shortest(MIXTURE, TRAIN);
 
 # ╔═╡ 08c9d2ee-9c4c-57db-ac0b-2e8cc638fd03
 Markdown.parse("""
-The paper offered its claim as intuition. Six years later, David McAllester's [PAC-Bayes bound](https://arxiv.org/abs/1307.2118) (1999) proved a precise form of it. If the prior is chosen before the data are seen, and the cases are drawn independently, then a network whose weights are drawn from a cloud ``Q`` has a test error at most about ``\\sqrt{\\mathrm{KL}(Q \\,\\|\\, P) / 2N}`` above its training error, on a loss scaled from 0 to 1. The KL is the paper's weight cost, in nats. Few bits keep the test error close to the training error, though the fit still has to be good. [Dziugaite and Roy (2017)](https://arxiv.org/abs/1703.11008) trained Gaussian clouds of weights to minimize this bound directly, and got guarantees that weren't vacuous for deep networks with millions of weights.
+The paper offered its claim as intuition. Six years later, David McAllester's [PAC-Bayes bound](https://arxiv.org/abs/1307.2118) (1999) proved a precise form of it. If the prior is chosen before the data are seen, and the cases are drawn independently, then a network whose weights are drawn from a cloud ``Q`` has a test error at most about ``\\sqrt{\\mathrm{KL}(Q \\,\\|\\, P) / 2N}`` above its training error, on a loss scaled from 0 to 1. The KL is the paper's weight cost, in nats. Few bits keep the test error close to the training error, though the fit still has to be good. Our priors don't quite qualify: their widths and shares were fitted to the same training cases, and a bound must pay for that choice. [Dziugaite and Roy (2017)](https://arxiv.org/abs/1703.11008) trained Gaussian clouds of weights to minimize this bound directly, and got guarantees that weren't vacuous for deep networks with millions of weights.
 
 The loss is still with us: over latent variables instead of weights, it is the loss of [variational autoencoders](https://arxiv.org/abs/1312.6114). So is its trap. Variational autoencoders warm up their KL term from near 0 ([Bowman et al., 2016](https://arxiv.org/abs/1511.06349)), for the paper's reason.
 
@@ -716,11 +726,11 @@ let err = relative_error(predict(MEMORIZER, NOISE_TARGETS.x), NOISE_TARGETS)
     Markdown.parse("""
     Its training error on the noise is $(fixed(err, 3)). It has memorized $(num_of_cases(NOISE_TARGETS)) random numbers.
 
-    That settles what COMP would say about this network. A model that can fit any targets gives every one of them its best fit, so its best fit plus its COMP comes to about the cost of sending the targets as they are, and if the targets can be any real numbers, COMP is infinite. It is Digits again, one level up. [Zhang et al. (2017)](https://arxiv.org/abs/1611.03530), item 23 on our list, made the same observation famous for real networks.
+    That settles what COMP would say about this model. It is Digits again, one level up. Digits fits any string of ``n`` bits perfectly, so its fit costs 0 and its COMP is ``n``: the whole cost of sending the string as it is. A model that can fit any targets is the same. Its fit costs almost nothing, and its COMP is about what the raw targets cost. Targets that can be any real numbers take infinitely many bits to send exactly, and for them COMP is infinite. [Zhang et al. (2017)](https://arxiv.org/abs/1611.03530), item 23 on our list, made the same observation famous for real networks.
 
-    So COMP fails twice: it can't be computed in time, and if it could, it wouldn't help. It is a price on the class, the same for every network of this shape, so only the fit decides, and the best fit is memorizing.
+    So COMP fails twice: it can't be computed in time, and if it could, it wouldn't help. It is a price on the model, the same for every member, so only the fit decides, and the best fit is memorizing.
 
-    The question has shifted. Notebook 03 asked which model explains a string best. Here we want the network, among all those of one shape, that predicts new cases best, and that needs a price on each network for what it actually learned. The paper charges for exactly that, the bits in the weights after training, and makes the charge its loss.
+    The question has shifted. Notebook 03 asked which model explains a string best. Here we want the member, the setting of the weights, that predicts new cases best, and that needs a price on each member for what it actually learned. The paper charges for exactly that, the bits in the weights after training, and makes the charge its loss.
     """)
 end
 
@@ -730,12 +740,12 @@ For our $(num_of_cases(TRAIN)) training targets, that is $(fixed(no_network(TRAI
 
 Measured against no network, a network is an investment. On the misfits it *saves* bits, because they are smaller than the targets' own spread. On its weights it *spends* bits. It is worth sending only if it saves more than it spends, and its net saving is how much shorter it makes the description.
 
-The paper's claim compares the weights' information with the targets', but the targets' count includes the tolerance term, which grows without limit as the tolerance gets finer. A fairer measure for the weights is what they save. Read this way, the claim is a ledger: a network generalizes when its weights cost much less than they save. The intuition is the paper's own. Weights that hold few bits can't have memorized much, so what they hold must be structure the cases share, and structure carries over to new cases.
+The paper's claim compares the weights' information with the targets', but the targets' count includes the tolerance term, which grows without limit as the tolerance gets finer. A fairer measure for the weights is what they save. Read this way, the claim is a ledger: the larger a network's net saving, the better it should generalize. The intuition is the paper's own. Weights that hold few bits can't have memorized much, so what they hold must be structure the cases share, and structure carries over to new cases.
 """)
 
 # ╔═╡ d1c1a326-d00d-5bfd-a564-a4ffb65134cd
 Markdown.parse("""
-Weight decay is calmer than the plain network, but blurred, and still speckled by the distractors. It is close to a tilted plane, high above and low below, and the two plateaus at 0 are missing. The paper saw the same (§9): with small weights, "the hidden units operate in their central linear range, so the whole network is effectively linear".
+Weight decay is calmer than the plain network, but blurred, and still speckled by the distractors. It is close to a tilted plane, high at the top of the map and low at the bottom, and the two plateaus at 0 are missing. The paper saw the same (§9): with small weights, "the hidden units operate in their central linear range, so the whole network is effectively linear".
 
 | | relative test error |
 |:--|--:|
@@ -771,9 +781,11 @@ let θ = BEST_GAUSSIAN
     | the truth, first ridge | 2 | 1 | 0 | 1 |
     | the truth, second ridge | −1 | 2 | 0 | 1 |
 
-    Its relative test error is $(fixed(cloud_error(θ, TEST), 3)), against $(fixed(relative_error(predict(DECAY.net, TEST.x), TEST), 3)) for weight decay, and nothing was held out to get it.
+    The second ridge's minus sign has moved inside, since ``\\tanh`` is odd: ``-\\tanh(x_1 - 2x_2) = \\tanh(-x_1 + 2x_2)``.
 
-    Here it is on the plane, its prediction averaged over draws of the weights:
+    To predict, the cloud averages its outputs over 500 draws of the weights. That way, its relative test error is $(fixed(cloud_error(θ, TEST), 3)), against $(fixed(relative_error(predict(DECAY.net, TEST.x), TEST), 3)) for weight decay, and nothing was held out to get it.
+
+    Here it is on the plane:
     """)
 end
 
@@ -783,7 +795,7 @@ let runs = [(s = s, l = ledger(θ, TRAIN), err = cloud_error(θ, TEST)) for (s, 
     Markdown.parse("""
     Now read the table's net savings against its test errors. Sorted by net saving, the starts' test errors fall into line, up to a near-tie between the top two. That is the claim, across five networks trained on the same cases: the more a network's weights save beyond what they cost, the better it generalizes.
 
-    Spending little is not enough on its own. Start $(frugal.s) spends only $(fixed(frugal.l.spent)) bits on its weights, against $(fixed(best.l.spent)) for start $(best.s), but it fits badly: it saves only $(fixed(frugal.l.saved)) bits on the misfits, and its test error is $(fixed(frugal.err, 3)). What counts is the cost *relative to the saving*, and that balance is what the loss trades.
+    Spending little is not enough on its own. Start $(frugal.s) spends only $(fixed(frugal.l.spent)) bits on its weights, against $(fixed(best.l.spent)) for start $(best.s), but it fits badly: it saves only $(fixed(frugal.l.saved)) bits on the misfits, and its test error is $(fixed(frugal.err, 3)). What counts is the difference between the two, the net saving, and that is what the loss maximizes.
     """)
 end
 
@@ -801,7 +813,7 @@ let l = ledger(BEST_GAUSSIAN, TRAIN), units = active_units(BEST_GAUSSIAN)
     Markdown.parse("""
     ### Where the bits go
 
-    Back to the real targets. The best one-Gaussian network carries the signal in $(3 * length(units)) weights: in each of its $(length(units)) used units, one from ``x_1``, one from ``x_2``, and one to the output. Yet its weights spend $(fixed(l.spent)) bits. Where do they go?
+    Back to the real targets. The best one-Gaussian network carries the signal in $(3 * length(units)) weights: in each of its $(length(units)) used units, one from ``x_1``, one from ``x_2``, and one to the output. Yet its weights spend $(fixed(l.spent)) bits, $(round(Int, 100 * l.spent / l.saved))% of what they save. The net saving is large, but these are not the lean weights the claim pictures. Where do the bits go?
 
     Each used unit also has 20 weights coming in from the distractors, and the truth wants every one of them at a precise 0. A distractor weight with a wide cloud adds noise to its unit on every case; twenty of them add up, and the unit's signal drowns. So each must be held much closer to 0 than the prior is wide, and that narrowing is what the KL charges for:
     """)
@@ -813,6 +825,7 @@ let rows = map(SCARCE) do (; n, data, gaussian, mixture)
         collapsed(θs) = count(θ -> ledger(θ, data).spent < 1, θs)
         "| $n | $(fixed(g.net)) ($(collapsed(gaussian)) of 5 collapsed) | $(fixed(s.net)) ($(collapsed(mixture)) of 5 collapsed) |"
     end
+    m50 = shortest(SCARCE[2].mixture, SCARCE[2].data)
     Markdown.parse("""
     | cases | one Gaussian, best start | mixture, best start |
     |--:|--:|--:|
@@ -821,7 +834,7 @@ let rows = map(SCARCE) do (; n, data, gaussian, mixture)
 
     Net savings in bits. A start has *collapsed* when its weights cost less than 1 bit: it predicts the targets' mean, which is no network at all.
 
-    At 30 cases, every start of both codes collapses. At 50, one Gaussian still collapses every time, and the mixture gets partway. The paper met the same thing. The shortest description it found "was the solution in which all the weights except the output bias are equal and negative", with a relative error of about 1, and it called this "a serious embarrassment for the Minimum Description Length Principle or for our method of describing the weights".
+    At 30 cases, every start of both codes collapses. At 50, one Gaussian still collapses every time, and the mixture gets only partway: its best start uses $(length(active_units(m50))) hidden unit, reading ``x_2`` alone, and scores $(fixed(cloud_error(m50, TEST), 3)) on the test set. The paper met the same thing. The shortest description it found "was the solution in which all the weights except the output bias are equal and negative", with a relative error of about 1, and it called this "a serious embarrassment for the Minimum Description Length Principle or for our method of describing the weights".
 
     There are three suspects: MDL itself, the code, or the search. We can tell them apart, because we know the truth. Fix the means at the true weights, refit everything else, and see what the truth saves under each code:
     """)
@@ -838,6 +851,8 @@ let trained = [[ledger(shortest(r.mixture, r.data), r.data).net for r in SCARCE]
     $(join(rows, "\n"))
 
     Net savings in bits. Under the mixture, the truth saves bits even at 30 cases; training just never found it. Under one Gaussian, at 30 and 50 cases, the truth costs more than it saves.
+
+    At 100 cases, the trained networks beat the truth: the mixture's by a little, and one Gaussian's, at $(fixed(ledger(BEST_GAUSSIAN, TRAIN).net)) bits, by a lot. The mixture's gap is innocent. The truth's means are held at whole numbers, and this sample of noise prefers slightly different ones. One Gaussian's gap is the leak from *Where the bits go*: its trained network fits a little of the noise through its distractor weights, which saves bits on the training cases and costs accuracy on new ones. Under that code, a slightly overfit network is a shorter description than the truth.
 
     The means were held still, though. Free them too, starting from the priced truth at 30 cases, and train on, three times each with fresh noise:
     """)
@@ -861,7 +876,7 @@ let data = TRUTH_PRICED[1].data
 
     - **One Gaussian: the code.** Even the truth costs more than it saves, and started there, training walks away.
     - **The mixture: the search.** A description that saves bits exists, and it is stable once found, but no random start reaches it. This is the trap the warm-up was meant to avoid: weights that hold almost nothing are easy to reach, and hard to leave.
-    - **MDL itself is acquitted**, here. With a good code, the shortest description is still the truth.
+    - **MDL itself is acquitted**, here. With a good code, the shortest description has the truth's structure.
     """)
 end
 
@@ -1017,9 +1032,9 @@ let runs = [(l = ledger(θ, TRAIN), units = length(active_units(θ)), share = sp
     split_ridge = filter(r -> r.units > 2, runs)
     loose = filter(r -> r.units == 2 && r.share < 0.9, runs)
     Markdown.parse("""
-    The other starts landed elsewhere. $(length(split_ridge)) of them split one ridge across two units, for a net saving of $(span(split_ridge)) bits. $(length(loose)) found the two ridges again, under a looser mixture whose spike has only a $(round(Int, 100 * minimum(r.share for r in loose)))–$(round(Int, 100 * maximum(r.share for r in loose)))% share, so pointing at it costs more: a net saving of $(span(loose)). The best saves $(fixed(best.l.net)).
+    The other starts landed elsewhere. $(length(split_ridge)) of them split one ridge across two units, for a net saving of $(span(split_ridge)) bits. $(length(loose)) found the two ridges again, under a looser mixture whose spike has only a $(round(Int, 100 * minimum(r.share for r in loose))) to $(round(Int, 100 * maximum(r.share for r in loose)))% share, so pointing at it costs more: a net saving of $(span(loose)). The best saves $(fixed(best.l.net)).
 
-    All five score $(between([r.err for r in runs], 3)) on the test set, so test error can't rank them. The ledger can, and it puts the truth first.
+    All five score $(between([r.err for r in runs], 3)) on the test set, so here the claim has nothing to predict: all five generalize alike. The ledger still ranks them, by simplicity alone, and its favourite is the simplest: the truth's two units, under the tightest spike.
     """)
 end
 
@@ -1056,11 +1071,11 @@ end
 
 # ╔═╡ 280abba4-d2a3-53de-bc26-154763b473f5
 Markdown.parse("""
-In the two used units, the rows for ``x_1``, ``x_2`` and the output carry the signal. Between them, the distractor rows glow faintly, weight after weight, and that faint glow, $(zero_bill(BEST_GAUSSIAN).count) times over, is most of the bill. The output row glows across the idle units too, for the same reason. Their incoming clouds are as wide as the prior, which costs nothing, so their outputs are pure noise, and each output weight must hold a precise 0 to keep it out: one precise zero instead of $(INPUTS + 1).
+In the two used units, the rows for ``x_1``, ``x_2`` and the output carry the signal. Between them, the distractor rows glow faintly, weight after weight, and that faint glow, $(zero_bill(BEST_GAUSSIAN).count) times over, is most of the bill. The two units' biases are precise zeros too, and glow the same. The output row glows across the idle units as well, for the same reason. Their incoming clouds are as wide as the prior, which costs nothing, so their outputs are pure noise, and each output weight must hold a precise 0 to keep it out: one precise zero instead of $(INPUTS + 1).
 
-The zeros also cost accuracy. One Gaussian charges for their widths but hardly pulls in their means, so they sit a little off 0, and fresh distractors leak through. That leak is the speckle on the map, and it keeps the test error, $(fixed(cloud_error(BEST_GAUSSIAN, TEST), 3)), above the floor of $(fixed(FLOOR, 3)).
+The zeros also cost accuracy. One Gaussian charges for their widths but hardly pulls in their means. The pull is the KL's ``\\mu^2 / 2\\sigma_P^2`` term, and for means of a few hundredths under a prior of width $(fixed(exp(BEST_GAUSSIAN.prior.layer_1), 2)), it is almost nothing. So the zeros sit a little off 0, fitting a little of the training noise, and fresh distractors leak through. That leak is the speckle on the map, and it keeps the test error, $(fixed(cloud_error(BEST_GAUSSIAN, TEST), 3)), above the floor of $(fixed(FLOOR, 3)).
 
-The trouble is the prior, not the network. One Gaussian must cover the weights near 2 and the weights at 0 with a single width, and it can't be narrow for the zeros without being narrow for the rest. The paper saw this coming (§6.1): "no single Gaussian prior can provide a good model of a spike around 0 and a spike around 1."
+The trouble is the prior, not the network. One Gaussian must cover the weights near 2 and the weights at 0 with a single width, and it can't be narrow for the zeros without being narrow for the rest. The bill shows both sides. Its darkest cell, at $(fixed(maximum(bit_table(BEST_GAUSSIAN)))) bits, is the weight of about 2 from ``x_1``, and most of its cost is the ``\\mu^2`` term, for sitting more than four prior widths from 0. The zeros pay the opposite price, for being far narrower than the prior. The paper saw this coming (§6.1): "no single Gaussian prior can provide a good model of a spike around 0 and a spike around 1."
 """)
 
 # ╔═╡ ccb5fc61-c16c-5237-b9de-a764149d50a5
@@ -1082,7 +1097,7 @@ let g = BEST_GAUSSIAN, θ = BEST_MIXTURE
     | net saving | $(fixed(lg.net)) | $(fixed(l.net)) |
     | relative test error | $(fixed(cloud_error(g, TEST), 3)) | $(fixed(cloud_error(θ, TEST), 3)) |
 
-    A zero now costs a fraction of a bit. The mixture spends $(round(Int, 100 * l.spent / lg.spent))% as much on its weights and saves more on the misfits, and its test error is next to the truth's own, $(fixed(FLOOR, 3)). The ledger and the claim agree again.
+    A zero now costs a fraction of a bit. The mixture spends $(round(Int, 100 * l.spent / lg.spent))% as much on its weights and saves more on the misfits, and its test error is next to the truth's own, $(fixed(FLOOR, 3)). Its weights now cost $(round(Int, 100 * l.spent / l.saved))% of what they save. The ledger and the claim agree again.
 
     The bill, on the same scale as before:
     """)
@@ -1104,9 +1119,9 @@ let decay = relative_error(predict(DECAY.net, TEST.x), TEST)
 
     The paper claimed that a network generalizes when its weights hold much less information than its targets, so it should be trained on the expected squared error plus the information in its weights.
 
-    On our task, the claim held. Trained on that loss, with nothing held out, the network beat weight decay tuned by cross-validation: $(fixed(cloud_error(BEST_GAUSSIAN, TEST), 3)) with one Gaussian, and $(fixed(cloud_error(BEST_MIXTURE, TEST), 3)) with a mixture of Gaussians, against $(fixed(decay, 3)). The networks whose weights saved the most beyond their cost generalized best, and on pure noise the loss sent nothing. How much a network saves depends on the prior it is coded with: one Gaussian paid $(fixed(zero_bill(BEST_GAUSSIAN).low)) bits or more for every zero, and a mixture of Gaussians said zero almost for free. With scarce data, the search gave out before MDL did.
+    On our task, the claim held. Trained on that loss, with nothing held out, the network beat weight decay tuned by cross-validation: $(fixed(cloud_error(BEST_GAUSSIAN, TEST), 3)) with one Gaussian, and $(fixed(cloud_error(BEST_MIXTURE, TEST), 3)) with a mixture of Gaussians, against $(fixed(decay, 3)). Among the networks training found, those whose weights saved the most beyond their cost generalized best, and on pure noise the loss sent nothing. How much a network saves depends on the prior it is coded with: one Gaussian paid $(fixed(zero_bill(BEST_GAUSSIAN).low)) bits or more for every zero, and a mixture of Gaussians said zero almost for free. With scarce data, the search gave out before MDL did.
 
-    So how many bits does a network need? Not the 64 a computer stores for each weight: the mixture network sent all $(length(BEST_MIXTURE.μ)) of its weights in $(fixed(ledger(BEST_MIXTURE, TRAIN).spent)) bits, most of them in the six that carry the ridges.
+    So how many bits does a network need? Not the 64 a computer stores for each weight: the mixture network sent all $(length(BEST_MIXTURE.μ)) of its weights in $(fixed(ledger(BEST_MIXTURE, TRAIN).spent)) bits, net of the refund, most of them in the six that carry the ridges.
 
     Here is every network in this notebook on the plane, each titled with its relative test error:
     """)
