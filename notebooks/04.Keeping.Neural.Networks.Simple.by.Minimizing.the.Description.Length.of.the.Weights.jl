@@ -726,7 +726,7 @@ let err = relative_error(predict(MEMORIZER, NOISE_TARGETS.x), NOISE_TARGETS)
     Markdown.parse("""
     Its training error on the noise is $(fixed(err, 3)). It has memorized $(num_of_cases(NOISE_TARGETS)) random numbers.
 
-    That settles what COMP would say about this model. It is Digits again, one level up. Digits fits any string of ``n`` bits perfectly, so its fit costs 0 and its COMP is ``n``: the whole cost of sending the string as it is. A model that can fit any targets is the same. Its fit costs almost nothing, and its COMP is about what the raw targets cost. Targets that can be any real numbers take infinitely many bits to send exactly, and for them COMP is infinite. [Zhang et al. (2017)](https://arxiv.org/abs/1611.03530), item 23 on our list, made the same observation famous for real networks.
+    That settles what COMP would say about this model. It is Digits again, one level up. Digits fits any string of ``n`` bits perfectly, so its fit costs 0 and its COMP is ``n``: the whole cost of sending the string as it is. A model that can fit any targets is the same. Its fit costs almost nothing, and its COMP is about what the raw targets cost. Targets that can be any real numbers take infinitely many bits to send exactly, and for them COMP is infinite. [Zhang et al. (2017)](https://arxiv.org/abs/1611.03530), item 24 on our list, made the same observation famous for real networks.
 
     So COMP fails twice: it can't be computed in time, and if it could, it wouldn't help. It is a price on the model, the same for every member, so only the fit decides, and the best fit is memorizing.
 
