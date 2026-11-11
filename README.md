@@ -17,8 +17,9 @@ Each item is worked through as a **Build**: the smallest thing to implement that
 | 1 | [01 · An Observation on Generalization](https://zxygentoo.github.io/the-ninety-percent-list/01.An.Observation.on.Generalization.html) | ✅ |
 | 2 | [02 · Kolmogorov Complexity and Algorithmic Randomness](https://zxygentoo.github.io/the-ninety-percent-list/02.Kolmogorov.Complexity.and.Algorithmic.Randomness.html) | ✅ |
 | 3 | [03 · A Tutorial Introduction to the Minimum Description Length Principle](https://zxygentoo.github.io/the-ninety-percent-list/03.A.Tutorial.Introduction.to.the.Minimum.Description.Length.Principle.html) | ✅ |
+| 4 | [04 · Keeping Neural Networks Simple by Minimizing the Description Length of the Weights](https://zxygentoo.github.io/the-ninety-percent-list/04.Keeping.Neural.Networks.Simple.by.Minimizing.the.Description.Length.of.the.Weights.html) | ✅ |
 
-Progress: **3 / 30** items built `███░░░░░░░░░░░░░░░░░░░░░░░░░░░`
+Progress: **4 / 30** items built `████░░░░░░░░░░░░░░░░░░░░░░░░░░`
 
 ### Running a notebook
 
