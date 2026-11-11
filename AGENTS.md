@@ -41,8 +41,9 @@ One list item at a time:
 
 - `notebooks/NN.Title.With.Dots.jl`: the notebooks, numbered in reading order. Each is a self-contained [Pluto](https://plutojl.org) file.
 - `notebooks/data/`: a download cache shared by the notebooks, ignored by git.
-- `_scratch/`: temporary scripts used while building a notebook, ignored by git.
+- `_scratch/NN/`: temporary scripts and drafts used while building notebook `NN`, one folder per notebook, ignored by git. Name the files without the number, which the folder already carries: `_scratch/04/noisy.jl`, not `_scratch/04.noisy.jl`.
 - `scripts/export.jl`: runs every notebook headlessly and writes `site/`, one static HTML page per notebook plus `index.html`. It fails if any cell errors. Its environment is `scripts/Project.toml`.
+- `scripts/run.jl`: runs one notebook headlessly, as the export does, prints any errored cells, and writes every cell's output to a directory: text to `outputs.txt`, images as PNGs. Use it to check a notebook's numbers and figures without opening Pluto. Same environment.
 - `.github/workflows/pages.yml`: builds `site/` on every push to `main` and deploys it to GitHub Pages.
 
 ## Export
@@ -50,6 +51,7 @@ One list item at a time:
 ```sh
 julia --project=scripts -e 'using Pkg; Pkg.instantiate()'   # once
 julia --project=scripts scripts/export.jl                    # writes site/
+julia --project=scripts scripts/run.jl NN.Title.jl <dir>     # one notebook, its outputs in <dir>/outputs
 ```
 
 The export runs every notebook in a fresh Pluto session and never writes the notebook files. It exits with an error that names any notebook with errored cells.
