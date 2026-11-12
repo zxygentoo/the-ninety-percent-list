@@ -625,9 +625,11 @@ BEST_MIXTURE = shortest(MIXTURE, TRAIN);
 
 # ╔═╡ 08c9d2ee-9c4c-57db-ac0b-2e8cc638fd03
 Markdown.parse("""
-The paper offered its claim as intuition. Six years later, David McAllester's [PAC-Bayes bound](https://arxiv.org/abs/1307.2118) (1999) proved a precise form of it. If the prior is chosen before the data are seen, and the cases are drawn independently, then a network whose weights are drawn from a cloud ``Q`` has a test error at most about ``\\sqrt{\\mathrm{KL}(Q \\,\\|\\, P) / 2N}`` above its training error, on a loss scaled from 0 to 1. The KL is the paper's weight cost, in nats. Few bits keep the test error close to the training error, though the fit still has to be good. Our priors don't quite qualify: their widths and shares were fitted to the same training cases, and a bound must pay for that choice. [Dziugaite and Roy (2017)](https://arxiv.org/abs/1703.11008) trained Gaussian clouds of weights to minimize this bound directly, and got guarantees that weren't vacuous for deep networks with millions of weights.
+The paper offered its claim as intuition. Six years later, David McAllester proved a precise form of it, the PAC-Bayes bound (1999).
 
-The loss is still with us: over latent variables instead of weights, it is the loss of [variational autoencoders](https://arxiv.org/abs/1312.6114). So is its trap. Variational autoencoders warm up their KL term from near 0 ([Bowman et al., 2016](https://arxiv.org/abs/1511.06349)), for the paper's reason.
+His [2013 tutorial](https://arxiv.org/abs/1307.2118) is the gentler way in: it starts from a bound in bits and works up to clouds of weights. In the bound's best-known form, if the prior is chosen before the data are seen, and the cases are drawn independently, then a network whose weights are drawn from a cloud ``Q`` has a test error at most about ``\\sqrt{\\mathrm{KL}(Q \\,\\|\\, P) / 2N}`` above its training error, on a loss scaled from 0 to 1. The KL is the paper's weight cost, in nats.
+
+The loss of the paper is still with us: over latent variables instead of weights, it is the loss of [variational autoencoders](https://arxiv.org/abs/1312.6114). So is its trap. Variational autoencoders warm up their KL term from near 0 ([Bowman et al., 2016](https://arxiv.org/abs/1511.06349)), for the paper's reason.
 
 Notebook 03 left a twist to carry along: [Blier and Ollivier](https://arxiv.org/abs/1802.07044) found that variational codes, the descendants of this loss, give "surprisingly poor" compression bounds on deep networks. The loss is an upper bound, only as tight as the clouds and the prior allow. Even at $(length(BEST_MIXTURE.μ)) weights, ours needed the right prior, a warm-up, and restarts, and at 30 cases a much shorter description existed that training couldn't find.
 
