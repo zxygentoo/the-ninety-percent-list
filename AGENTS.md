@@ -29,6 +29,11 @@ One list item at a time:
 - Strongly prefer a functional style; Julia supports it well.
 - Favor clarity and readability over performance. Don't be afraid to use more cells if it helps.
 - Strive to make it beautiful and pleasant to read.
+- On function docstrings:
+    - If the code is clear enough, don't add one.
+    - If one is needed, write it in the context of the notebook.
+    - If a few examples would make things much clearer, consider adding them.
+- Pluto doesn't render a comment above a variable definition the way it renders a function's docstring, so if the comment serves better as prose, spend the extra cell.
 
 ### Prose
 
