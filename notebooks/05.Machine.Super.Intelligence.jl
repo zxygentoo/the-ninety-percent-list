@@ -27,17 +27,17 @@ md"""
 
 A process ``\mu`` produces a bit sequence. Here are the first ten bits:
 
-`0101010101`
+`1010101010`
 
-What's the chance the next bit is a 0?
+What's the chance the next bit is a 1?
 
-Alternation says it's certain. But a process that alternates for ten bits and then prints only 1s fits them just as well, and so do endlessly many others. Even if we know that some program computes ``\mu``, no run of bits, however long, singles that program out.
+Alternation says it's certain. But a process that alternates for ten bits and then prints only 0s fits them just as well, and so do endlessly many others. Even if we know that some program computes ``\mu``, no run of bits, however long, singles that program out.
 
-Solomonoff's answer is not to choose. Bet on every predictor a program can describe, all at once, and bet more on those with shorter programs: alternation takes a few bits to write, while the switch to 1s must also spell out when it happens, so its program is longer.
+Solomonoff's answer is not to choose. Bet on every predictor a program can describe, all at once, and bet more on those with shorter programs: alternation takes a few bits to write, while the switch to 0s must also spell out when it happens, so its program is longer.
 
 The bet is a mixture of all of them, written ``\xi``.
 
-Its promise (Theorem 2.7.1) is that whatever the true process ``\mu``, the mixture's total error stays below a constant, proportional to ``K(\mu)``: the length of the shortest program that computes ``\mu``.
+Its promise (Theorem 2.7.1) is that whatever the true process ``\mu``, the mixture's total error stays below a constant, proportional to ``K(\mu)``, ``\mu``'s *Kolmogorov complexity*: the length of the shortest program that computes it. It's notebook 02's ``K``, for a process instead of a string.
 
 ``\xi`` can't be computed, since its list holds every program. So we build a small one, short enough to write out, and check its promise empirically, in two ways:
 
@@ -50,19 +50,33 @@ This is the prediction half of chapter 2 (§2.4–2.7) of Shane Legg's [thesis](
 # ╔═╡ b10a5215-4d41-5ccd-a6ad-eaec38622508
 TableOfContents()
 
-# ╔═╡ 2b8418e1-76c6-51d9-a691-942ab98641e3
+# ╔═╡ 6b0eadbf-0ef0-432a-af32-5e3d4519ce69
 md"""
 ## The predictor
 
-A *predictor* reads the bits so far and gives the chance that the next one is a 1. Ours look back at most two bits: a predictor of *order* ``k`` gives one chance for each of the ``2^k`` contexts its last ``k`` bits can form.
+A *predictor* reads the last ``k`` bits and gives the chance that the next one is a 1.
 
-A *program* names a predictor in three fields:
+We call ``k`` its *order*, and the last ``k`` bits its *context*. There are ``2^k`` possible contexts, and a predictor of order ``k`` gives a chance for each of them.
 
-1. the order ``k``, in unary;
-2. the *precision* ``b``, in unary;
-3. the ``2^k`` chances, ``b`` bits each.
+To write a predictor down as a program, a string of bits, we encode its order and its ``2^k`` chances, so that a reader can tell where each part ends.
 
-A ``b``-bit field is a binary search on ``[0, 1]``: each bit halves the cell it's in, and the chance is the middle of the last cell. With no bits, that's the middle of ``[0, 1]``, ½.
+The order is simple. We write it in unary, which marks its own end with a 0:
+"""
+
+# ╔═╡ 26956974-c66e-5449-8757-79b8acacbc04
+"""
+`n` in unary: `n` ones, then a zero.
+
+    unary(0) == "0"
+    unary(1) == "10"
+    unary(2) == "110"
+    unary(8) == "111111110"
+"""
+unary(n) = "1"^n * "0"
+
+# ╔═╡ 2b8418e1-76c6-51d9-a691-942ab98641e3
+md"""
+The chances need a *precision* ``b``: each is written in ``b`` bits, which split ``[0, 1]`` into ``2^b`` equal cells. Each bit halves the cell it's in, and the chance is the middle of the last cell. With no bits, that's the middle of ``[0, 1]``, ½.
 
 ```
 b = 0   [                1/2                ]
@@ -70,43 +84,116 @@ b = 1   [       1/4       |       3/4       ]
 b = 2   [  1/8   |  3/8   |  5/8   |  7/8   ]
 ```
 
-No chance is ever 0 or 1, and none appears at two precisions.
-
-For example, the program `101101100` reads:
-
-- `10`: order 1, one chance for each value of the last bit;
-- `110`: precision 2;
-- `11` and `00`: the chances 7/8 after a 0, and 1/8 after a 1.
-
-It predicts alternation, broken one time in eight.
-
-This is Grünwald's very crude code for Markov chains ([tutorial](https://arxiv.org/abs/math/0406077), Example 2.8), with the precision written into the program, so the list is the same for any amount of data.
+So no chance is ever 0 or 1: no predictor is ever certain, and no bit can cost it infinitely many bits.
 """
 
 # ╔═╡ 94769f6a-50c6-5099-80af-8566c99deb74
 """
 The chances `b` bits can name: the middles of `2^b` equal cells of [0, 1].
 
-    grid(0) == [1/2]                   # no bits: one cell, and its middle
-    grid(1) == [1/4, 3/4]              # field 0 picks 1/4, field 1 picks 3/4
-    grid(2) == [1/8, 3/8, 5/8, 7/8]    # fields 00, 01, 10, 11
-    grid(3)[0b101 + 1] == 11/16        # field 101 picks 11/16
+    chances(0) == [1/2]
+    chances(1) == [1/4, 3/4]
+    chances(2) == [1/8, 3/8, 5/8, 7/8]
 """
-grid(b) = [(j + 1 / 2) / 2^b for j in 0:2^b-1]
+chances(b) = [(j + 1 / 2) / 2^b for j in 0:2^b-1]
 
-# ╔═╡ 26956974-c66e-5449-8757-79b8acacbc04
-unary(n) = "1"^n * "0"
+# ╔═╡ 82136905-954c-4d96-90dc-dd6d300edb9b
+md"""
+Now we can name a predictor in three fields:
+
+1. the order ``k``, in unary;
+2. the precision ``b``, in unary as well;
+3. the ``2^k`` chances, ``b`` bits each.
+
+Each field tells where it ends: the unary ones at their 0, and the chances after exactly ``2^k b`` bits.
+"""
 
 # ╔═╡ 6f460fc0-1c46-5991-800a-2211606e0558
 "A predictor of order `k` whose chances `θ`, one per context, have `b` bits each."
 predictor(k, b, θ) = (order = k, precision = b, θ = collect(θ))
 
+# ╔═╡ 1f353388-be7b-479f-9964-07be2100eb3a
+md"""`program` writes a predictor down, field by field:"""
+
 # ╔═╡ c9a17ceb-a92d-51cc-b89d-506fa05fc193
-"Predictor `ν`'s program, as a string of bits."
+"""
+Predictor `ν`'s program, as a string of bits.
+
+    program(predictor(0, 0, [1/2])) == "00"
+    program(predictor(1, 2, [7/8, 1/8])) == "101101100"
+"""
 function program(ν)
     field(θ) = string(Int(θ * 2^ν.precision - 1 / 2); base = 2, pad = ν.precision)
     unary(ν.order) * unary(ν.precision) * join(field.(ν.θ))
 end
+
+# ╔═╡ 0eac926e-f5ac-4854-b88d-1650031004fa
+program(predictor(1, 2, [7/8, 1/8]))
+
+# ╔═╡ bfa94811-1dd0-4bdc-81e7-3d71a0433faf
+md"""
+That's `101101100`, and it reads:
+
+- `10`: order 1, one chance for each value of the last bit;
+- `110`: precision 2;
+- `11` and `00`: a 1 has the chance 7/8 after a 0, and 1/8 after a 1.
+
+It predicts alternation, broken one time in eight. The shortest program is the fair coin's, `00`: order 0, precision 0, and one chance that takes no bits.
+
+This is Grünwald's very crude code for Markov chains ([tutorial](https://arxiv.org/abs/math/0406077), Example 2.8), with the precision written into the program, so the list is the same for any amount of data.
+"""
+
+# ╔═╡ bfeacea6-0693-4a05-a48c-a371b2d9f198
+md"""
+## Making prediction
+
+Now we can make predictions using our predictor.
+
+Given context:
+"""
+
+# ╔═╡ ca52db12-954f-55d9-b71e-81a24e630d59
+"""
+The `k` bits before position `t`, read in order as a binary number. Bits before
+the start count as zeros.
+
+    x = [1, 0, 1, 1]
+    context(x, 4, 2) == 0b01    # x[2], x[3] are 0, 1
+    context(x, 3, 2) == 0b10    # x[1], x[2] are 1, 0
+    context(x, 4, 1) == 1       # x[3] is 1
+    context(x, 1, 2) == 0b00    # nothing seen yet
+"""
+context(x, t, k) = sum(((t - j ≥ 1 ? x[t-j] : 0) << (j - 1) for j in 1:k); init = 0)
+
+# ╔═╡ 43e64bb7-9da7-4066-a124-3b999164c722
+md"A predictor gives the chance of a 1 next for it:"
+
+# ╔═╡ 300b0f43-de6d-5f1e-87c1-d45a71510915
+"`ν`'s chance that bit `t` is a 1, having seen `x[1:t-1]`."
+predict(ν, x, t) = ν.θ[context(x, t, ν.order)+1]
+
+# ╔═╡ 1b2a7cb7-6569-4093-9806-bca1e665cbb3
+md"For a single prediction, it's chance:"
+
+# ╔═╡ a66a76b2-9f64-4ff0-8f5c-5ccf3eba8d9c
+"If it's a 1, then the prediction is right, otherwise filp the odds."
+chance(p, bit) = bit == 1 ? p : 1 - p
+
+# ╔═╡ d1af595e-6a01-45fd-8885-1068e5a2dcd4
+md"So the total cost of send a sequence with the predictions for each bit:"
+
+# ╔═╡ 14956fcc-0dd5-5271-8230-c434cbe22bfa
+"The bits it takes to send `x[1:t]` with the predictions `ps`, for every `t`."
+cost(ps, x) = cumsum(-log2.(chance.(ps, x)))
+
+# ╔═╡ ff744d04-317b-42ce-9217-22a05535dc7f
+md"""
+Think it as sending a bit sequence between a sender and a receiver, the both have the same predictor as a program.
+
+With a program of "00" (a fair coin), it helps nothing, the sender have to send every bit. But with a program of "101010" (repeating 0s), sending a sequence of 0s cost nothing, you just have to tell the receiver how long the sequence is and he can simply get it from the predictions alone.
+
+(This cell needs work)
+"""
 
 # ╔═╡ d013c228-c565-4b44-8e2b-b62bf520e6d8
 md"""
@@ -129,18 +216,30 @@ PREDICTORS = [
     predictor(k, b, θ)
         for k in 0:MAX_ORDER
         for b in 0:MAX_PRECISION
-        for θ in Iterators.product(ntuple(_ -> grid(b), 2^k)...)
+        for θ in Iterators.product(ntuple(_ -> chances(b), 2^k)...)
 ]
 
 # ╔═╡ ab726d26-082c-4c83-b20c-063d45f438b3
-md"""And each program's weight, ``2^{-\ell}``, where ``\ell`` is its length in bits: the chance that ``\ell`` fair coin flips spell it out:"""
+md"""
+``\xi`` will bet on every predictor on the list, but not equally. What it bets on each is the predictor's *weight*, and the weights share a budget of 1.
+
+Solomonoff bets more on shorter programs: flip a fair coin for each bit, and stop as soon as the bits spell a program. A program of ``\ell`` bits comes up with chance ``2^{-\ell}``, and that's its weight:
+"""
 
 # ╔═╡ 69c7a1fb-4ccf-5622-a0fb-fcedd41c9ab5
 WEIGHTS = [exp2(-length(program(ν))) for ν in PREDICTORS]
 
+# ╔═╡ 20d72b26-89e2-53ff-8c33-15fed8880aa1
+"""All predictions from `ν` for all of its contexts up to our limit."""
+predictions(ν) = [ν.θ[c%2^ν.order+1] for c in 0:2^MAX_ORDER-1]
+
+# ╔═╡ 4195c305-897c-59e5-a916-570c19b2a8ea
+"The programs that describe the same predictor as `μ` in our list."
+programs_for(μ) = [predictions(ν) == predictions(μ) for ν in PREDICTORS]
+
 # ╔═╡ 40f37aae-7096-519f-81e6-ac14fd65dec5
 md"""
-## Bet on all predictors
+## Bet on all of them
 
 Legg's ``\xi`` (Def. 2.5.4) bets on every predictor at once, each in proportion to its weight:
 
@@ -159,74 +258,9 @@ where ``\nu(1 \mid x)`` is ``\nu``'s chance of a 1 after ``x``. Each fraction is
 Why not pick the best predictor so far instead? A sum is at least each of its terms: ``\xi(x) \ge 2^{-\ell(\nu)}\, \nu(x)`` for every ``\nu``. In bits, ``\xi`` never needs more than any one program's two-part code from notebook 03: the program, then the bits sent with its help. Picking commits to one program, and pays for every pick that turns out wrong.
 """
 
-# ╔═╡ ca52db12-954f-55d9-b71e-81a24e630d59
-"""
-The `k` bits before position `t`, read in order as a binary number. Bits before
-the start count as zeros.
-
-    x = [1, 0, 1, 1]
-    context(x, 4, 2) == 0b01    # x[2], x[3] are 0, 1
-    context(x, 3, 2) == 0b10    # x[1], x[2] are 1, 0
-    context(x, 4, 1) == 1       # x[3] is 1
-    context(x, 1, 2) == 0b00    # nothing seen yet
-"""
-context(x, t, k) = sum(((t - j ≥ 1 ? x[t-j] : 0) << (j - 1) for j in 1:k); init = 0)
-
-# ╔═╡ 300b0f43-de6d-5f1e-87c1-d45a71510915
-"`ν`'s chance that bit `t` is a 1, having seen `x[1:t-1]`."
-predict(ν, x, t) = ν.θ[context(x, t, ν.order)+1]
-
-# ╔═╡ 20d72b26-89e2-53ff-8c33-15fed8880aa1
-"What `ν` does, whatever program wrote it: its chance of a 1 after each context of `MAX_ORDER` bits."
-behaviour(ν) = [ν.θ[c%2^ν.order+1] for c in 0:2^MAX_ORDER-1]
-
-# ╔═╡ 9bf87089-2b58-5388-b04a-5cdf527ebee0
-# Every predictor's behaviour, one row each, so a step of the mixture is a lookup.
-BEHAVIOURS = permutedims(reduce(hcat, behaviour.(PREDICTORS)))
-
-# ╔═╡ 4195c305-897c-59e5-a916-570c19b2a8ea
-"The programs that compute the same predictor as `μ`: the fair coin, say, at any order."
-programs_for(μ) = [behaviour(ν) == behaviour(μ) for ν in PREDICTORS]
-
-# ╔═╡ cbd05755-649f-5782-a020-43515d528fc8
-md"""
-## Four sources
-
-To test ``\xi``, we draw bits from one predictor on the list, the truth ``\mu``, and don't tell ``\xi`` which one. Four of them, with programs from 2 to 19 bits:
-"""
-
-# ╔═╡ ddfbda75-1b44-5501-a9dc-8b421b87771a
-SOURCES = [
-    (name = "fair coin", μ = predictor(0, 0, [1 / 2])),
-    (name = "coin at 1/8", μ = predictor(0, 2, [1 / 8])),
-    (name = "alternating, flips at 1/8", μ = predictor(1, 2, [7 / 8, 1 / 8])),
-    (name = "order 2", μ = predictor(2, 3, [1 / 16, 11 / 16, 13 / 16, 7 / 16])),
-]
-
-# ╔═╡ a1767280-2cc6-55d8-ba38-498a4f923a76
-sample(μ, n, rng) =
-    foldl((x, t) -> push!(x, rand(rng) < predict(μ, x, t) ? 1 : 0), 1:n; init = Int[])
-
 # ╔═╡ 07693073-f6a5-58c2-9a99-5003ed13b613
 "`μ`'s fee: −log₂ of the total weight on its programs."
 fee(μ) = -log2(sum(WEIGHTS[programs_for(μ)]))
-
-# ╔═╡ 6c0f2e1a-722d-5a88-ba33-39c262e1e4f3
-md"""
-## Fee, regret and doubt
-
-What does it cost ``\xi`` not to know which predictor is the truth? Count it in bits. ``\xi``'s *regret* is how many more bits it needs for the sequence than the truth does:
-
-```math
-\text{regret}_t = -\log_2 \xi(x_{1:t}) - \bigl(-\log_2 \mu(x_{1:t})\bigr).
-```
-
-Legg never names this quantity; *regret* is MDL's word.
-
-The *fee* in the table is the price of naming the truth: the bits it takes to say which predictor ``\mu`` is, with ``\xi``'s weights as the code. It's at most the length of ``\mu``'s shortest program, our ``K(\mu)``, and less when ``\mu`` has several.
-
-``\xi`` is never told the name, but it pays for it anyway, in installments, through the data.
-"""
 
 # ╔═╡ e711492e-b1ef-56f4-86dd-6168f3b92a23
 md"""
@@ -296,11 +330,70 @@ Unlike Claim 1, it holds only on average. A misleading bit refunds regret, but n
 md"""
 ## Testing the claims
 
+We test both claims on four sources, each a predictor from the list.
+"""
+
+# ╔═╡ cbd05755-649f-5782-a020-43515d528fc8
+md"""
+### Four sources
+
+Their programs run from 2 to 19 bits:
+"""
+
+# ╔═╡ ddfbda75-1b44-5501-a9dc-8b421b87771a
+SOURCES = [
+    (name = "fair coin", μ = predictor(0, 0, [1 / 2])),
+    (name = "coin at 1/8", μ = predictor(0, 2, [1 / 8])),
+    (name = "alternating, flips at 1/8", μ = predictor(1, 2, [7 / 8, 1 / 8])),
+    (name = "order 2", μ = predictor(2, 3, [1 / 16, 11 / 16, 13 / 16, 7 / 16])),
+]
+
+# ╔═╡ a1767280-2cc6-55d8-ba38-498a4f923a76
+sample(μ, n, rng) =
+    foldl((x, t) -> push!(x, rand(rng) < predict(μ, x, t) ? 1 : 0), 1:n; init = Int[])
+
+# ╔═╡ b1c2acb1-878c-5e54-b0b4-bae24b84c0a5
+md"""
 A test draws ``N`` bits from a source, bets on them, and records the regret, the doubt and the squared gaps, bit by bit:
 """
 
 # ╔═╡ 6608cd0a-e892-5ca5-851e-e88dbb3df674
 N = 3000
+
+# ╔═╡ 9bf87089-2b58-5388-b04a-5cdf527ebee0
+# Every predictor's behaviour, one row each, so a step of the mixture is a lookup.
+PREDICTIONS = permutedims(reduce(hcat, predictions.(PREDICTORS)))
+
+# ╔═╡ f85bf2be-2521-5234-b315-749fe81d9ffe
+"""
+Bet on every predictor at once along `x`, one bit at a time, while the truth is
+`μ`. Before each bit, record ξ's prediction and μ's. After it, record ξ's
+*doubt*: −log₂ of the weight it now puts on `μ`'s programs.
+"""
+function bet(x, μ)
+    truth = findall(programs_for(μ))
+    function step((w, _), t)
+        p = view(PREDICTIONS, :, context(x, t, MAX_ORDER) + 1)
+        ξ = sum(wᵢ * pᵢ for (wᵢ, pᵢ) in zip(w, p))
+        next = w .* chance.(p, x[t]) ./ chance(ξ, x[t])
+        next, (; ξ, μ = predict(μ, x, t), doubt = -log2(sum(view(next, truth))))
+    end
+    map(last, Iterators.accumulate(step, eachindex(x); init = (WEIGHTS ./ sum(WEIGHTS), nothing)))
+end
+
+# ╔═╡ 364bb9bb-dbb8-5bcf-a639-a3aa958fca4c
+"""
+`N` bits drawn from `μ` with `seed`, and what betting on them costs, step by step:
+ξ's regret, its doubt, and its running Σ(ξ − μ)².
+"""
+function draw(μ, seed)
+    x = sample(μ, N, Xoshiro(seed))
+    steps = bet(x, μ)
+    ξs, μs = getfield.(steps, :ξ), getfield.(steps, :μ)
+    (; regret = STARTING_REGRET .+ cost(ξs, x) .- cost(μs, x),
+       doubt = getfield.(steps, :doubt),
+       S = cumsum((ξs .- μs) .^ 2))
+end
 
 # ╔═╡ 120b372d-e133-5d3f-9742-fb115ea82ad7
 md"""
@@ -308,6 +401,9 @@ md"""
 
 One sequence from each source first:
 """
+
+# ╔═╡ ddc467e0-9956-567f-a678-b614a402e47e
+EXAMPLES = [draw(s.μ, 1) for s in SOURCES]
 
 # ╔═╡ ebe14752-9b79-5ce1-b2e6-64cff35c45bb
 md"""
@@ -329,50 +425,38 @@ md"""
 The chance of a bit, number formatting, a threaded map, and the chart style.
 """
 
-# ╔═╡ 2d757f0f-a4a6-52e9-9b59-df2b0f5f99ee
-chance(p, bit) = bit == 1 ? p : 1 - p
-
-# ╔═╡ f85bf2be-2521-5234-b315-749fe81d9ffe
-"""
-Bet on every predictor at once along `x`, one bit at a time, while the truth is
-`μ`. Before each bit, record ξ's prediction and μ's. After it, record ξ's
-*doubt*: −log₂ of the weight it now puts on `μ`'s programs.
-"""
-function bet(x, μ)
-    truth = findall(programs_for(μ))
-    function step((w, _), t)
-        p = view(BEHAVIOURS, :, context(x, t, MAX_ORDER) + 1)
-        ξ = sum(wᵢ * pᵢ for (wᵢ, pᵢ) in zip(w, p))
-        next = w .* chance.(p, x[t]) ./ chance(ξ, x[t])
-        next, (; ξ, μ = predict(μ, x, t), doubt = -log2(sum(view(next, truth))))
-    end
-    map(last, Iterators.accumulate(step, eachindex(x); init = (WEIGHTS ./ sum(WEIGHTS), nothing)))
-end
-
-# ╔═╡ 14956fcc-0dd5-5271-8230-c434cbe22bfa
-"The bits it takes to send `x[1:t]` with the predictions `ps`, for every `t`."
-bits_so_far(ps, x) = cumsum(-log2.(chance.(ps, x)))
-
-# ╔═╡ 364bb9bb-dbb8-5bcf-a639-a3aa958fca4c
-"""
-`N` bits drawn from `μ` with `seed`, and what betting on them costs, step by step:
-ξ's regret, its doubt, and its running Σ(ξ − μ)².
-"""
-function draw(μ, seed)
-    x = sample(μ, N, Xoshiro(seed))
-    steps = bet(x, μ)
-    ξs, μs = getfield.(steps, :ξ), getfield.(steps, :μ)
-    (; regret = STARTING_REGRET .+ bits_so_far(ξs, x) .- bits_so_far(μs, x),
-       doubt = getfield.(steps, :doubt),
-       S = cumsum((ξs .- μs) .^ 2))
-end
-
-# ╔═╡ ddc467e0-9956-567f-a678-b614a402e47e
-EXAMPLES = [draw(s.μ, 1) for s in SOURCES]
-
 # ╔═╡ 704d8f96-cd78-5ddf-9a90-30cb68d4dc6a
 "`x` with `d` decimals."
 fixed(x, d = 1) = Printf.format(Printf.Format("%.$(d)f"), x)
+
+# ╔═╡ 28d1adda-8b0c-43c7-a18b-a89d7cc5028d
+md"""
+No program is the start of another, so the flips spell at most one program, and the weights can't sum past 1. Here they sum to $(fixed(sum(WEIGHTS), 2)): the rest is the chance of spelling a program the language can write but the list leaves out, of order 3 and up or precision 4 and up.
+
+A weight depends only on its program's length, not on how many other programs there are, so the list can grow without taking anything from the programs already on it. Legg's prior (Def. 2.5.3) is the same, with one weight per predictor: ``2^{-K}``.
+"""
+
+# ╔═╡ 6c0f2e1a-722d-5a88-ba33-39c262e1e4f3
+md"""
+## Fee, regret and doubt
+
+Suppose the bits come from one predictor on the list, the truth ``\mu``, and ``\xi`` isn't told which. What does not knowing cost? Count it in bits. ``\xi``'s *regret* is how many more bits it needs for the sequence than the truth does:
+
+```math
+\text{regret}_t = -\log_2 \xi(x_{1:t}) - \bigl(-\log_2 \mu(x_{1:t})\bigr).
+```
+
+Legg never names this quantity; *regret* is MDL's word.
+
+The *fee* is the price of naming the truth: the bits it takes to say which predictor ``\mu`` is, with the weights as the code. That's ``-\log_2`` of the total weight on ``\mu``'s programs, at most the length of its shortest program, our ``K(\mu)``, and less when it has several. The fair coin has three, `00`, `100` and `1100`, whose weights add up to 7/16, so its fee is $(fixed(fee(predictor(0, 0, [1/2])), 2)) bits, though its shortest program has 2.
+
+``\xi`` is never told the name, but it pays for it anyway, in installments, through the data.
+"""
+
+# ╔═╡ 104348f3-a806-593a-9ba0-9f4d8299dc7c
+md"""
+Before the first bit, the regret is already $(fixed(STARTING_REGRET, 2)) bits: ``-\log_2`` of the weights' total, $(fixed(sum(WEIGHTS), 2)). That's ``\xi``'s stake on the programs left off the list, which it never wins back, so the doubt starts at the rest of the fee.
+"""
 
 # ╔═╡ a47f5125-3bd6-59a7-94c6-ed0aeb7fd301
 let rows = map(SOURCES) do (; name, μ)
@@ -383,14 +467,9 @@ let rows = map(SOURCES) do (; name, μ)
     |:--|:--|--:|--:|--:|
     $(join(rows, "\n"))
 
-    The *fee* is ``-\\log_2`` of the total weight on the truth's programs. Most sources have one program that dominates, so their fee is about its length. The fair coin has three short ones, at orders 0, 1 and 2, of 2, 3 and 4 bits. Their weights add up to 7/16, so its fee is $(fixed(fee(SOURCES[1].μ), 2)) bits, though its shortest program has 2.
+    Most sources have one program that dominates, so their fee is about its length.
     """)
 end
-
-# ╔═╡ 104348f3-a806-593a-9ba0-9f4d8299dc7c
-md"""
-Before the first bit, the regret is already $(fixed(STARTING_REGRET, 2)) bits: ``-\log_2`` of the weights' total, $(fixed(sum(WEIGHTS), 2)). That's ``\xi``'s stake on the programs left off the list, which it never wins back, so the doubt starts at the rest of the fee.
-"""
 
 # ╔═╡ 08c82a03-9fa4-5b9d-a374-b5563d56bbf1
 "A whole number, with commas between the thousands."
@@ -398,9 +477,7 @@ commas(n::Integer) = replace(string(n), r"(?<=\d)(?=(\d{3})+$)" => ",")
 
 # ╔═╡ e223181b-546d-526a-8f1d-a1f959bc3aeb
 md"""
-The list holds $(commas(length(PREDICTORS))) predictors. No program is the start of another, so flipping coins spells out at most one of them, and their weights can't sum past 1. Here they sum to $(fixed(sum(WEIGHTS), 2)): the rest belongs to programs the language can write but the list leaves out, of order 3 and up or precision 4 and up. Flip coins, and $(round(Int, 100 * (1 - sum(WEIGHTS))))% of the time you spell one of those.
-
-Why weigh by length? The weights are a budget of 1, and Solomonoff's list never ends. Equal shares would give each of ``N`` programs ``1/N``, and each of infinitely many, nothing. A weight of ``2^{-\ell}`` depends only on the program's own length, not on how many others there are, and since short programs are few, each can have a large share. Legg's prior (Def. 2.5.3) is the same idea, with one weight per predictor, ``2^{-K}``.
+The list holds $(commas(length(PREDICTORS))) predictors.
 """
 
 # ╔═╡ 97700adc-8d57-5055-b652-e03984aa6501
@@ -2516,40 +2593,53 @@ uuid = "23338594-aafe-5451-b93e-139f81909106"
 # ╟─942b639c-bf53-5823-8d4f-de5881d3c04f
 # ╠═05725c63-8e71-54fb-a753-1d7886e63d3a
 # ╟─b10a5215-4d41-5ccd-a6ad-eaec38622508
+# ╟─6b0eadbf-0ef0-432a-af32-5e3d4519ce69
+# ╠═26956974-c66e-5449-8757-79b8acacbc04
 # ╟─2b8418e1-76c6-51d9-a691-942ab98641e3
 # ╠═94769f6a-50c6-5099-80af-8566c99deb74
-# ╠═26956974-c66e-5449-8757-79b8acacbc04
+# ╟─82136905-954c-4d96-90dc-dd6d300edb9b
 # ╠═6f460fc0-1c46-5991-800a-2211606e0558
+# ╟─1f353388-be7b-479f-9964-07be2100eb3a
 # ╠═c9a17ceb-a92d-51cc-b89d-506fa05fc193
+# ╠═0eac926e-f5ac-4854-b88d-1650031004fa
+# ╟─bfa94811-1dd0-4bdc-81e7-3d71a0433faf
+# ╟─bfeacea6-0693-4a05-a48c-a371b2d9f198
+# ╠═ca52db12-954f-55d9-b71e-81a24e630d59
+# ╟─43e64bb7-9da7-4066-a124-3b999164c722
+# ╠═300b0f43-de6d-5f1e-87c1-d45a71510915
+# ╟─1b2a7cb7-6569-4093-9806-bca1e665cbb3
+# ╠═a66a76b2-9f64-4ff0-8f5c-5ccf3eba8d9c
+# ╟─d1af595e-6a01-45fd-8885-1068e5a2dcd4
+# ╠═14956fcc-0dd5-5271-8230-c434cbe22bfa
+# ╟─ff744d04-317b-42ce-9217-22a05535dc7f
 # ╟─d013c228-c565-4b44-8e2b-b62bf520e6d8
 # ╠═ed295beb-ac4d-558a-a933-fa512c4b14f1
 # ╠═ae285ef6-24d8-53e8-9212-7093a98b5996
 # ╟─a586f028-7139-4df9-a28c-1a229a782c45
 # ╠═fadc1764-1b80-5912-87ad-80040c7bb536
+# ╟─e223181b-546d-526a-8f1d-a1f959bc3aeb
 # ╟─ab726d26-082c-4c83-b20c-063d45f438b3
 # ╠═69c7a1fb-4ccf-5622-a0fb-fcedd41c9ab5
-# ╟─e223181b-546d-526a-8f1d-a1f959bc3aeb
-# ╟─40f37aae-7096-519f-81e6-ac14fd65dec5
-# ╠═ca52db12-954f-55d9-b71e-81a24e630d59
-# ╠═300b0f43-de6d-5f1e-87c1-d45a71510915
+# ╟─28d1adda-8b0c-43c7-a18b-a89d7cc5028d
 # ╠═20d72b26-89e2-53ff-8c33-15fed8880aa1
-# ╠═9bf87089-2b58-5388-b04a-5cdf527ebee0
 # ╠═4195c305-897c-59e5-a916-570c19b2a8ea
-# ╠═f85bf2be-2521-5234-b315-749fe81d9ffe
-# ╠═14956fcc-0dd5-5271-8230-c434cbe22bfa
-# ╟─cbd05755-649f-5782-a020-43515d528fc8
-# ╠═ddfbda75-1b44-5501-a9dc-8b421b87771a
-# ╠═a1767280-2cc6-55d8-ba38-498a4f923a76
-# ╠═07693073-f6a5-58c2-9a99-5003ed13b613
-# ╟─a47f5125-3bd6-59a7-94c6-ed0aeb7fd301
+# ╟─40f37aae-7096-519f-81e6-ac14fd65dec5
 # ╟─6c0f2e1a-722d-5a88-ba33-39c262e1e4f3
+# ╠═07693073-f6a5-58c2-9a99-5003ed13b613
 # ╟─e711492e-b1ef-56f4-86dd-6168f3b92a23
 # ╟─104348f3-a806-593a-9ba0-9f4d8299dc7c
 # ╠═7c7ee428-0693-5196-9f70-c16bb7178624
 # ╟─bccd5d9c-0d2b-5cfe-bb9e-354f6dc49c40
 # ╟─f0b0efeb-cce2-5461-8f7c-f20cce5ba8c1
 # ╟─de44bd39-1e6e-52b3-b187-2d82e8bea8fb
+# ╟─cbd05755-649f-5782-a020-43515d528fc8
+# ╠═ddfbda75-1b44-5501-a9dc-8b421b87771a
+# ╠═a1767280-2cc6-55d8-ba38-498a4f923a76
+# ╟─a47f5125-3bd6-59a7-94c6-ed0aeb7fd301
+# ╟─b1c2acb1-878c-5e54-b0b4-bae24b84c0a5
 # ╠═6608cd0a-e892-5ca5-851e-e88dbb3df674
+# ╠═9bf87089-2b58-5388-b04a-5cdf527ebee0
+# ╠═f85bf2be-2521-5234-b315-749fe81d9ffe
 # ╠═364bb9bb-dbb8-5bcf-a639-a3aa958fca4c
 # ╟─120b372d-e133-5d3f-9742-fb115ea82ad7
 # ╠═ddc467e0-9956-567f-a678-b614a402e47e
@@ -2566,7 +2656,6 @@ uuid = "23338594-aafe-5451-b93e-139f81909106"
 # ╟─790985b6-c3c8-564f-8216-c443092cd97b
 # ╟─78797b07-984c-512d-8a72-ced0da21df6a
 # ╟─71391962-660d-5d7f-86ab-c9319fa462ad
-# ╠═2d757f0f-a4a6-52e9-9b59-df2b0f5f99ee
 # ╠═704d8f96-cd78-5ddf-9a90-30cb68d4dc6a
 # ╠═08c82a03-9fa4-5b9d-a374-b5563d56bbf1
 # ╠═72ed5461-7de0-5be6-9e20-b2070b71b343
