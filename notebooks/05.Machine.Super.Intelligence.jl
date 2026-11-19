@@ -44,7 +44,7 @@ Its promise (Theorem 2.7.1) is that whatever the true process ``\mu``, the mixtu
 - **In bits:** on every sequence, ``\xi`` needs at most ``K(\mu)`` bits more than ``\mu`` itself.
 - **In predictions:** on average, ``\xi``'s total squared error is at most ``\frac{\ln 2}{2} K(\mu)``.
 
-This is the prediction half of chapter 2 (§2.4–2.7) of Shane Legg's [thesis](https://www.vetta.org/documents/Machine_Super_Intelligence.pdf). Section numbers refer to it.
+This is the prediction half of chapter 2 (§2.4–2.7) of Shane Legg's [thesis](https://www.vetta.org/documents/Machine_Super_Intelligence.pdf). Section, definition and page numbers refer to it.
 """
 
 # ╔═╡ b10a5215-4d41-5ccd-a6ad-eaec38622508
@@ -143,13 +143,41 @@ It predicts alternation, broken one time in eight. The shortest program is the f
 This is Grünwald's very crude code for Markov chains ([tutorial](https://arxiv.org/abs/math/0406077), Example 2.8), with the precision written into the program, so the list is the same for any amount of data.
 """
 
+# ╔═╡ d013c228-c565-4b44-8e2b-b62bf520e6d8
+md"""
+There are infinitely many programs the language can write, and our compute is finite, so our list stops at a highest order and precision:
+"""
+
+# ╔═╡ ed295beb-ac4d-558a-a933-fa512c4b14f1
+MAX_ORDER = 2
+
+# ╔═╡ ae285ef6-24d8-53e8-9212-7093a98b5996
+MAX_PRECISION = 3
+
+# ╔═╡ a586f028-7139-4df9-a28c-1a229a782c45
+md"""And every program up to those limits:"""
+
+# ╔═╡ fadc1764-1b80-5912-87ad-80040c7bb536
+PREDICTORS = [
+    predictor(k, b, θ)
+        for k in 0:MAX_ORDER
+        for b in 0:MAX_PRECISION
+        for θ in Iterators.product(ntuple(_ -> chances(b), 2^k)...)
+]
+
+# ╔═╡ 20d72b26-89e2-53ff-8c33-15fed8880aa1
+"`ν`'s chance of a 1 after each context of `MAX_ORDER` bits."
+predictions(ν) = [ν.θ[c%2^ν.order+1] for c in 0:2^MAX_ORDER-1]
+
+# ╔═╡ 4195c305-897c-59e5-a916-570c19b2a8ea
+"The programs that describe the same predictor as `μ` in our list."
+programs_for(μ) = [predictions(ν) == predictions(μ) for ν in PREDICTORS]
+
 # ╔═╡ bfeacea6-0693-4a05-a48c-a371b2d9f198
 md"""
-## Making prediction
+## Making predictions
 
-Now we can make predictions using our predictor.
-
-Given context:
+A predictor predicts from its context: the last ``k`` bits, read as a number. Before the first bits there is no context yet, so missing bits count as zeros:
 """
 
 # ╔═╡ ca52db12-954f-55d9-b71e-81a24e630d59
@@ -166,21 +194,20 @@ the start count as zeros.
 context(x, t, k) = sum(((t - j ≥ 1 ? x[t-j] : 0) << (j - 1) for j in 1:k); init = 0)
 
 # ╔═╡ 43e64bb7-9da7-4066-a124-3b999164c722
-md"A predictor gives the chance of a 1 next for it:"
+md"Its chance of a 1 is the one its program names for that context:"
 
 # ╔═╡ 300b0f43-de6d-5f1e-87c1-d45a71510915
 "`ν`'s chance that bit `t` is a 1, having seen `x[1:t-1]`."
 predict(ν, x, t) = ν.θ[context(x, t, ν.order)+1]
 
 # ╔═╡ 1b2a7cb7-6569-4093-9806-bca1e665cbb3
-md"For a single prediction, it's chance:"
+md"Once the bit comes, what counts is the chance the prediction gave it:"
 
 # ╔═╡ a66a76b2-9f64-4ff0-8f5c-5ccf3eba8d9c
-"If it's a 1, then the prediction is right, otherwise filp the odds."
 chance(p, bit) = bit == 1 ? p : 1 - p
 
 # ╔═╡ d1af595e-6a01-45fd-8885-1068e5a2dcd4
-md"So the total cost of send a sequence with the predictions for each bit:"
+md"A distribution is a code (notebook 03): a bit given the chance ``p`` costs ``-\log_2 p`` bits to send. Over a sequence, the costs add up:"
 
 # ╔═╡ 14956fcc-0dd5-5271-8230-c434cbe22bfa
 "The bits it takes to send `x[1:t]` with the predictions `ps`, for every `t`."
@@ -188,124 +215,203 @@ cost(ps, x) = cumsum(-log2.(chance.(ps, x)))
 
 # ╔═╡ ff744d04-317b-42ce-9217-22a05535dc7f
 md"""
-Think it as sending a bit sequence between a sender and a receiver, the both have the same predictor as a program.
+Picture a sender and a receiver who share the predictor. Before each bit, both compute the same prediction, and the sender codes the bit with it using an arithmetic coder. The receiver decodes it with the same prediction.
 
-With a program of "00" (a fair coin), it helps nothing, the sender have to send every bit. But with a program of "101010" (repeating 0s), sending a sequence of 0s cost nothing, you just have to tell the receiver how long the sequence is and he can simply get it from the predictions alone.
-
-(This cell needs work)
+What it costs depends on how well the predictor fits the bits. Here are the intro's ten bits, sent with the fair coin and with the alternation predictor:
 """
 
-# ╔═╡ d013c228-c565-4b44-8e2b-b62bf520e6d8
+# ╔═╡ c10841f5-ec8d-415c-84a6-216611f5074c
+TEN_BITS = [1, 0, 1, 0, 1, 0, 1, 0, 1, 0]
+
+# ╔═╡ afdc66a8-40d9-54c1-9a04-6862b90e2f4d
+map((
+    fair_coin = predictor(0, 0, [1/2]),
+    alternation = predictor(1, 2, [7/8, 1/8]))) do ν
+    last(cost([predict(ν, TEN_BITS, t) for t in eachindex(TEN_BITS)], TEN_BITS))
+end
+
+# ╔═╡ d0c35b35-3ffa-59cd-bf7d-8c551ab00845
 md"""
-## All the predictors
+The fair coin gives every bit ½, so each costs 1 bit, 10 bits in all: it saves nothing. The alternation predictor gives each of these bits 7/8, so each costs about 0.19, 1.93 bits in all (had a bit broken the pattern, it would have cost 3).
 
-The highest order and precision on our list:
+A predictor that fits the bits makes them cheap; one that doesn't makes them expensive.
 """
-
-# ╔═╡ ed295beb-ac4d-558a-a933-fa512c4b14f1
-MAX_ORDER = 2
-
-# ╔═╡ ae285ef6-24d8-53e8-9212-7093a98b5996
-MAX_PRECISION = 3
-
-# ╔═╡ a586f028-7139-4df9-a28c-1a229a782c45
-md"""Every program up to those limits:"""
-
-# ╔═╡ fadc1764-1b80-5912-87ad-80040c7bb536
-PREDICTORS = [
-    predictor(k, b, θ)
-        for k in 0:MAX_ORDER
-        for b in 0:MAX_PRECISION
-        for θ in Iterators.product(ntuple(_ -> chances(b), 2^k)...)
-]
 
 # ╔═╡ ab726d26-082c-4c83-b20c-063d45f438b3
 md"""
-``\xi`` will bet on every predictor on the list, but not equally. What it bets on each is the predictor's *weight*, and the weights share a budget of 1.
+## Bet on all the predictors
 
-Solomonoff bets more on shorter programs: flip a fair coin for each bit, and stop as soon as the bits spell a program. A program of ``\ell`` bits comes up with chance ``2^{-\ell}``, and that's its weight:
+``\xi`` doesn't choose: it bets on every predictor on the list, and more on those with shorter programs. Flip a fair coin for each bit, and stop as soon as the bits spell a program. A program of ``\ell`` bits comes up with chance ``2^{-\ell}``, and that's its weight:
 """
 
 # ╔═╡ 69c7a1fb-4ccf-5622-a0fb-fcedd41c9ab5
 WEIGHTS = [exp2(-length(program(ν))) for ν in PREDICTORS]
 
-# ╔═╡ 20d72b26-89e2-53ff-8c33-15fed8880aa1
-"""All predictions from `ν` for all of its contexts up to our limit."""
-predictions(ν) = [ν.θ[c%2^ν.order+1] for c in 0:2^MAX_ORDER-1]
-
-# ╔═╡ 4195c305-897c-59e5-a916-570c19b2a8ea
-"The programs that describe the same predictor as `μ` in our list."
-programs_for(μ) = [predictions(ν) == predictions(μ) for ν in PREDICTORS]
-
 # ╔═╡ 40f37aae-7096-519f-81e6-ac14fd65dec5
 md"""
-## Bet on all of them
-
-Legg's ``\xi`` (Def. 2.5.4) bets on every predictor at once, each in proportion to its weight:
+The bet, Legg's ``\xi`` (Def. 2.5.4), adds up every predictor's chance of ``x``, times its weight:
 
 ```math
 \xi(x) = \sum_\nu 2^{-\ell(\nu)}\, \nu(x).
 ```
 
-That gives every sequence a chance, so ``\xi`` is itself a predictor. Its chance of a 1 after ``x`` is
+That gives every sequence a chance, so ``\xi`` is itself a predictor. Its chance of a 1 after ``x``:
 
 ```math
-\xi(1 \mid x) = \frac{\xi(x1)}{\xi(x)} = \sum_\nu \frac{2^{-\ell(\nu)}\, \nu(x)}{\xi(x)}\; \nu(1 \mid x),
+\xi(1 \mid x) = \frac{\xi(x1)}{\xi(x)} = \sum_\nu \frac{2^{-\ell(\nu)}\, \nu(x)}{\xi(x)}\; \nu(1 \mid x).
 ```
 
-where ``\nu(1 \mid x)`` is ``\nu``'s chance of a 1 after ``x``. Each fraction is a weight: the predictor's prior weight times the chance it gave ``x``, rescaled so the weights sum to 1. That's Bayes' rule. So ``\xi`` predicts with a weighted average of the predictors, and after each bit it updates the weights: weigh every predictor by the chance it gave the bit that came, then rescale. The rescaling factor is ``\xi``'s own chance of that bit.
+Each fraction is ``\nu``'s weight after ``x`` by Bayes' rule: its prior times the chance it gave ``x``, rescaled to sum to 1.
 
-Why not pick the best predictor so far instead? A sum is at least each of its terms: ``\xi(x) \ge 2^{-\ell(\nu)}\, \nu(x)`` for every ``\nu``. In bits, ``\xi`` never needs more than any one program's two-part code from notebook 03: the program, then the bits sent with its help. Picking commits to one program, and pays for every pick that turns out wrong.
+``\nu(x)`` is the product of the chances ``\nu`` gave each bit, so the rule can take one bit at a time, in one line:
+"""
+
+# ╔═╡ db7c766c-5609-519c-818d-d51b0b8407ce
+"""
+Bayes' rule: weigh each predictor by the chance its prediction `p` gave `bit`, then rescale.
+
+    # the fair coin and alternation 3/4, after a 0
+    # a 1 favours alternation
+    update([1//2, 1//2], [1//2, 3//4], 1) == [2//5, 3//5]
+    # a 0 favours the fair coin
+    update([1//2, 1//2], [1//2, 3//4], 0) == [2//3, 1//3]
+
+    # a bit both predict alike changes nothing
+    update([1//4, 3//4], [1//2, 1//2], 1) == [1//4, 3//4]
+"""
+update(w, p, bit) = w .* chance.(p, bit) ./ sum(w .* chance.(p, bit))
+
+# ╔═╡ e4b8adb2-fc28-4390-a563-25bd3ac64fd6
+md"All predictions in one lookup table, one row per predictor and one column per context:"
+
+# ╔═╡ 9bf87089-2b58-5388-b04a-5cdf527ebee0
+PREDICTIONS = permutedims(reduce(hcat, predictions.(PREDICTORS)))
+
+# ╔═╡ 0767132c-ef65-5b65-8d30-d7413b06e1ef
+"Every predictor's chance that bit `t` of `x` is a 1: the table's column for that bit's context."
+predictions_at(x, t) = view(PREDICTIONS, :, context(x, t, MAX_ORDER) + 1)
+
+# ╔═╡ f29b720f-66bc-5730-84ec-83c897fef1bc
+"ξ's weights along `x`: entry `t` is what it holds before bit `t`, and the last entry what it holds after them all."
+function weights_along(x)
+    start = WEIGHTS ./ sum(WEIGHTS)
+    [[start]; accumulate((w, t) -> update(w, predictions_at(x, t), x[t]), eachindex(x); init = start)]
+end
+
+# ╔═╡ 9b1d9232-85e9-5be2-8cdd-1d3b3203d271
+md"""
+Back to the intro's ten bits, and four predictors to watch:
+"""
+
+# ╔═╡ e919d87b-6530-5def-a0cd-79ec01fd46b9
+LEADERS = [
+    "fair coin" => predictor(0, 0, [1/2]),
+    "alternation, 3/4" => predictor(1, 1, [3/4, 1/4]),
+    "alternation, 7/8" => predictor(1, 2, [7/8, 1/8]),
+    "alternation, 15/16" => predictor(1, 3, [15/16, 1/16]),
+]
+
+# ╔═╡ 949dd8cc-dbe5-5200-a20e-f31f7cd8af51
+md"""
+Each bar below is ``\xi``'s whole budget, before the first bit and after each one: these four predictors' shares, each with its programs added up, and everything else on top:
+"""
+
+# ╔═╡ da958c7c-b6ee-5384-b106-de96d63dbf87
+"ξ's chance that bit `t` of `x` is a 1, with the weights `w`: every predictor's chance, weighed."
+mix(w, x, t) = sum(w .* predictions_at(x, t))
+
+# ╔═╡ e2306bfc-c7d9-4ac8-b8c8-5cd6da4e8af6
+md"""So ``\xi``'s prediction of a 1 after those ten bits:"""
+
+# ╔═╡ eefa07df-af38-5faf-9e45-1876af0b0389
+ANSWER = mix(last(weights_along(TEN_BITS)), TEN_BITS, 11)
+
+# ╔═╡ e6bebb61-e47d-5363-8152-1ba43837e636
+md"""
+Ten bits of alternation moved the weight from the short programs, which predicted them poorly, to the alternators, which predicted them well. But the weight is spread over alternators of different sharpness, and the fair coin still keeps some: ten bits can't rule it out. No predictor on our list is certain, and neither is the bet.
+"""
+
+# ╔═╡ 6c0f2e1a-722d-5a88-ba33-39c262e1e4f3
+md"""
+## Paying the price
+
+Suppose the bits come from one predictor on the list, the truth ``\mu``, and ``\xi`` isn't told which. What does not knowing cost?
+
+Start with what ``\xi`` believes: the weight it puts on the truth. Its prior weight is the chance the coin flips spell one of ``\mu``'s programs:
+
+```math
+W_\mu = \sum_{\nu \text{ describes } \mu} 2^{-\ell(\nu)}.
+```
+
+After the first ``t`` bits, ``x``, Bayes' rule has multiplied it by ``\mu``'s chance of ``x`` over ``\xi``'s. And a weight can't pass 1:
+
+```math
+W_\mu(x) = W_\mu\, \frac{\mu(x)}{\xi(x)} \le 1.
+```
+
+The ratio says two things:
+1. ``\xi`` spreads its bets over every predictor, so it usually gives ``x`` less chance than the truth does: the ratio is how far it falls short.
+2. The truth's weight grows by the same ratio: that's what ``\xi`` learns. A lesson costs what it teaches.
 """
 
 # ╔═╡ 07693073-f6a5-58c2-9a99-5003ed13b613
-"`μ`'s fee: −log₂ of the total weight on its programs."
-fee(μ) = -log2(sum(WEIGHTS[programs_for(μ)]))
+price(μ) = -log2(sum(WEIGHTS[programs_for(μ)]))
+
+# ╔═╡ 4e2fd55e-500b-4b26-a542-b1580f962635
+md"""
+What ``\xi`` has *paid* is how many more bits it spends on ``x`` than the truth does:
+
+```math
+\text{paid}_t = \log_2 \frac{\mu(x)}{\xi(x)} = -\log_2 \xi(x) - \bigl(-\log_2 \mu(x)\bigr).
+```
+
+What it still *owes* is the bits it would still take to name ``\mu``, with what it has learned. The two always add up to the price:
+
+```math
+\text{paid}_t + \text{owed}_t = \text{price}.
+```
+
+``\xi`` is never told ``\mu``'s name, but it pays the price anyway, in installments, through the data.
+
+> Elsewhere, what ``\xi`` has paid is called its *regret* against ``\mu``; Legg never names it.
+"""
 
 # ╔═╡ e711492e-b1ef-56f4-86dd-6168f3b92a23
 md"""
-### Paid and owed
-
-After ``x``, Bayes' rule puts the weight ``W_\mu\, \mu(x) / \xi(x)`` on the truth, where ``W_\mu`` is the prior weight on its programs. Call ``-\log_2`` of that weight ``\xi``'s *doubt*: the bits it would still take to name ``\mu``, with what ``\xi`` has learned. Take ``-\log_2`` of both sides, and the regret appears:
-
-```math
-\text{regret}_t + \text{doubt}_t = \text{fee}.
-```
-
-The regret is what ``\xi`` has paid so far, and the doubt is what it still owes.
-
-Each bit, Bayes' rule multiplies the truth's weight by ``\mu``'s chance of the bit over ``\xi``'s. So each bit moves the doubt down, and the regret up, by the same amount:
+The installments come one per bit. Each bit, Bayes' rule multiplies the truth's weight by ``\mu``'s chance of the bit over ``\xi``'s, so each bit moves the same amount from owed to paid:
 
 ```math
 \log_2 \frac{\mu(x_t \mid x_{<t})}{\xi(x_t \mid x_{<t})} .
 ```
 
-A lesson costs what it teaches. When the truth saw the bit coming better than ``\xi`` did, ``\xi`` pays, and learns. When ``\xi`` saw it better, the bit was misleading: ``\xi`` gains bits, and loses certainty.
+When the truth saw the bit coming better than ``\xi`` did, ``\xi`` pays, and learns. When ``\xi`` saw it better, the bit was misleading: ``\xi`` gains bits, and loses certainty.
 """
 
 # ╔═╡ 7c7ee428-0693-5196-9f70-c16bb7178624
-STARTING_REGRET = -log2(sum(WEIGHTS))
+PAID_UPFRONT = -log2(sum(WEIGHTS))
 
 # ╔═╡ bccd5d9c-0d2b-5cfe-bb9e-354f6dc49c40
 md"""
 ### Claim 1: in bits
 
-Doubt can't fall below 0, since a weight can't pass 1. So on every sequence, the regret can't pass the fee:
+What ``\xi`` owes can't fall below 0, so on every sequence,
 
 ```math
-\text{regret}_t \le \text{fee}.
+\text{paid}_t \le \text{price}.
 ```
 
-This is Legg's *dominance* (p. 36), ``2^{K(\mu)}\, \xi(x) \ge \mu(x)``, written in bits.
+It caps what ``\xi`` pays, not what it gets back: misleading bits can take what it has paid below 0, putting it ahead of the truth, for now.
 
-Nothing stops the regret from going below 0, though. When misleading bits push the truth's weight below its prior weight, the doubt exceeds the fee, and ``\xi`` is ahead of the truth, for now.
+Nothing here needs ``\mu`` to be the truth. Against any predictor ``\nu`` on the list, on any sequence, ``\xi`` needs at most the price of ``\nu`` more bits than ``\nu`` does, so it never needs more than notebook 03's two-part code: name ``\nu``, then send the bits with its help. ``\xi`` does nearly as well as the best predictor on the list, whichever that turns out to be, without ever choosing one. Betting on whichever predictor leads so far has no such guarantee: its bill is a patchwork of the predictors it trusted along the way, and nothing bounds it by the best of them.
+
+> Legg's *dominance* (p. 36), ``2^{K(\mu)}\, \xi(x) \ge \mu(x)``, is the same bound in probability, with ``K(\mu)`` in place of the price.
 """
 
 # ╔═╡ f0b0efeb-cce2-5461-8f7c-f20cce5ba8c1
 md"""
 ### Claim 2: in predictions
 
-Legg states the promise in predictions (Theorem 2.7.1):
+Solomonoff's convergence theorem (Legg's Theorem 2.7.1) states the promise in predictions:
 
 ```math
 \sum_{t=1}^{\infty} S_t \le \frac{\ln 2}{2} K(\mu),
@@ -313,31 +419,22 @@ Legg states the promise in predictions (Theorem 2.7.1):
 
 where ``S_t`` is the squared gap between ``\xi``'s chance of a 1 and ``\mu``'s at step ``t``, averaged over every history ``\mu`` could produce.
 
-Claim 1 holds on every sequence, so it holds on average: the expected regret is at most the fee. Leave aside the starting bits, and the expected regret is a sum over steps of the expected regret on each bit. On one bit, that's the KL divergence between ``\mu``'s prediction and ``\xi``'s, which is never negative: on average, every lesson costs something. Legg's proof (p. 39) works with the same sum, in nats: ``\sum_x \mu(x) \ln \frac{\mu(x)}{\xi(x)}``.
-
-Pinsker's inequality prices a gap. If two predictions of one bit differ by ``\delta``, their KL divergence is at least ``2\delta^2`` nats, or ``\frac{2}{\ln 2}\delta^2`` bits. Every unit of squared gap is paid for from the same budget, so
+Unlike Claim 1, this one holds only on average. Averaged over every history, each bit costs ``\xi`` something, and the further its prediction is from the truth's, the more: at least ``\frac{2}{\ln 2}`` bits times the squared gap. All of it comes out of the price, so
 
 ```math
-\sum_t S_t \le \frac{\ln 2}{2}\, \text{fee}.
+\sum_t S_t \le \frac{\ln 2}{2}\, \text{price}:
 ```
 
-That's Legg's theorem, with the fee in place of ``K(\mu)``.
+Solomonoff's theorem, with the price in place of ``K(\mu)``. On a single sequence, it can fail: a misleading bit refunds what ``\xi`` has paid, but nothing refunds a squared gap.
 
-Unlike Claim 1, it holds only on average. A misleading bit refunds regret, but nothing refunds a squared gap: on a sequence full of misleading bits, the regret can stay low while the squared gaps pile up.
+> The two steps have names: a bit's average cost is a KL divergence, and Pinsker's inequality bounds it below by the squared gap. Legg's sketch of the proof (p. 39) works with the same sum, in nats.
 """
 
 # ╔═╡ de44bd39-1e6e-52b3-b187-2d82e8bea8fb
 md"""
 ## Testing the claims
 
-We test both claims on four sources, each a predictor from the list.
-"""
-
-# ╔═╡ cbd05755-649f-5782-a020-43515d528fc8
-md"""
-### Four sources
-
-Their programs run from 2 to 19 bits:
+We test both claims on four sources, each a predictor from the list, with programs from 2 to 19 bits:
 """
 
 # ╔═╡ ddfbda75-1b44-5501-a9dc-8b421b87771a
@@ -348,50 +445,32 @@ SOURCES = [
     (name = "order 2", μ = predictor(2, 3, [1 / 16, 11 / 16, 13 / 16, 7 / 16])),
 ]
 
-# ╔═╡ a1767280-2cc6-55d8-ba38-498a4f923a76
-sample(μ, n, rng) =
-    foldl((x, t) -> push!(x, rand(rng) < predict(μ, x, t) ? 1 : 0), 1:n; init = Int[])
-
 # ╔═╡ b1c2acb1-878c-5e54-b0b4-bae24b84c0a5
 md"""
-A test draws ``N`` bits from a source, bets on them, and records the regret, the doubt and the squared gaps, bit by bit:
+A test draws ``N`` bits from a source, bets on them, and records what ``\xi`` has paid, what it owes, and the squared gaps, bit by bit:
 """
 
 # ╔═╡ 6608cd0a-e892-5ca5-851e-e88dbb3df674
 N = 3000
 
-# ╔═╡ 9bf87089-2b58-5388-b04a-5cdf527ebee0
-# Every predictor's behaviour, one row each, so a step of the mixture is a lookup.
-PREDICTIONS = permutedims(reduce(hcat, predictions.(PREDICTORS)))
-
-# ╔═╡ f85bf2be-2521-5234-b315-749fe81d9ffe
-"""
-Bet on every predictor at once along `x`, one bit at a time, while the truth is
-`μ`. Before each bit, record ξ's prediction and μ's. After it, record ξ's
-*doubt*: −log₂ of the weight it now puts on `μ`'s programs.
-"""
-function bet(x, μ)
-    truth = findall(programs_for(μ))
-    function step((w, _), t)
-        p = view(PREDICTIONS, :, context(x, t, MAX_ORDER) + 1)
-        ξ = sum(wᵢ * pᵢ for (wᵢ, pᵢ) in zip(w, p))
-        next = w .* chance.(p, x[t]) ./ chance(ξ, x[t])
-        next, (; ξ, μ = predict(μ, x, t), doubt = -log2(sum(view(next, truth))))
-    end
-    map(last, Iterators.accumulate(step, eachindex(x); init = (WEIGHTS ./ sum(WEIGHTS), nothing)))
-end
+# ╔═╡ a1767280-2cc6-55d8-ba38-498a4f923a76
+"`n` bits drawn from `μ`, each a 1 with the chance `μ` gives it."
+sample(μ, n, rng) =
+    foldl((x, t) -> push!(x, rand(rng) < predict(μ, x, t) ? 1 : 0), 1:n; init = Int[])
 
 # ╔═╡ 364bb9bb-dbb8-5bcf-a639-a3aa958fca4c
 """
-`N` bits drawn from `μ` with `seed`, and what betting on them costs, step by step:
-ξ's regret, its doubt, and its running Σ(ξ − μ)².
+`N` bits drawn from `μ` with `seed`, and ξ's bet on them, bit by bit: what it has
+paid, what it owes, and its running Σ(ξ − μ)².
 """
-function draw(μ, seed)
+function trial(μ, seed)
     x = sample(μ, N, Xoshiro(seed))
-    steps = bet(x, μ)
-    ξs, μs = getfield.(steps, :ξ), getfield.(steps, :μ)
-    (; regret = STARTING_REGRET .+ cost(ξs, x) .- cost(μs, x),
-       doubt = getfield.(steps, :doubt),
+    w = weights_along(x)
+    ξs = [mix(w[t], x, t) for t in 1:N]
+    μs = [predict(μ, x, t) for t in 1:N]
+    truth = programs_for(μ)
+    (; paid = PAID_UPFRONT .+ cost(ξs, x) .- cost(μs, x),
+       owed = [-log2(sum(w[t+1][truth])) for t in 1:N],
        S = cumsum((ξs .- μs) .^ 2))
 end
 
@@ -403,11 +482,11 @@ One sequence from each source first:
 """
 
 # ╔═╡ ddc467e0-9956-567f-a678-b614a402e47e
-EXAMPLES = [draw(s.μ, 1) for s in SOURCES]
+EXAMPLES = [trial(s.μ, 1) for s in SOURCES]
 
 # ╔═╡ ebe14752-9b79-5ce1-b2e6-64cff35c45bb
 md"""
-``\xi`` pays the fee once, to find out which predictor is talking, and from then on it codes at the truth's own rate. Stack the doubt on the regret, and the two parts of the price show, paid and owed:
+``\xi`` pays the price early, while it finds out which predictor is talking, and from then on it codes at the truth's own rate. Stack what it owes on what it has paid, and the two parts of the price show:
 """
 
 # ╔═╡ 94fc4917-ac38-51c9-892d-1ac751e4c3a1
@@ -415,14 +494,40 @@ RUNS = 1000
 
 # ╔═╡ 78797b07-984c-512d-8a72-ced0da21df6a
 md"""
-What if the truth isn't on the list: a coin at 0.3, say? No program names it, so ``\xi`` never stops paying. On our list, capped at 3 bits, it settles on the nearest chance, 5/16, and pays a little on every bit. On a list whose precision never runs out, it keeps moving to finer chances, and the regret grows like ``\log n``: notebook 03's COMP again. Solomonoff's list does have 0.3, since a short program computes it; its only gaps are the chances no program computes.
+## The full picture
+
+Our list stops at order 2 and precision 3, and both claims need the truth to be on it. What if it isn't: a coin at 0.3, say? No program names it, so ``\xi`` never stops paying. It settles on the nearest chance, 5/16, and pays a little on every bit, so what it has paid grows in step with the bits.
+
+More precision helps, but not for free. Each extra bit of precision halves the cell around 0.3, and adds two bits to the program: one to the unary precision, one to the chance. And a finer chance only pays off once the data can tell it from its neighbours, which takes a sequence four times as long for each halving. So on a list whose precision never runs out, ``\xi`` keeps moving to finer chances as the bits come in, and what it pays grows like ``\log n``: notebook 03's COMP again, the log of how many coins the data can tell apart.
+"""
+
+# ╔═╡ 9237f845-61c5-5b63-9363-a1dac0a6e75a
+md"""
+While we were writing this notebook, 3Blue1Brown published [*This algorithm changed how I think about compression*](https://www.youtube.com/watch?v=qbsb9DpdZ6s), on arithmetic codes: the coder our sender and receiver share. It turns a whole message into one number in ``[0, 1)``, pinned down to finer and finer precision as the symbols come in, each narrowing the interval to the share its chance gives it.
+"""
+
+# ╔═╡ baf84fac-12da-50b2-923b-61883ba2d5e5
+html"""
+<iframe src="https://www.youtube-nocookie.com/embed/qbsb9DpdZ6s" title="This algorithm changed how I think about compression (3Blue1Brown, 2026)"
+        style="width: 100%; aspect-ratio: 16 / 9; border: 0;"
+        allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+"""
+
+# ╔═╡ bee35bd4-698d-563c-879f-2cf80429f8e8
+md"""
+It's almost too perfect a picture of this notebook. Every cost here, ``-\log_2 p``, is the bits it takes to narrow the interval by a factor of ``p``, and every bit of our precision field halves a cell.
+
+> The video even links Sutskever's talk from [notebook 01](https://zxygentoo.github.io/the-ninety-percent-list/01.An.Observation.on.Generalization.html), and prequential coding from [notebook 03](https://zxygentoo.github.io/the-ninety-percent-list/03.A.Tutorial.Introduction.to.the.Minimum.Description.Length.Principle.html).
+
+This notebook stops at §2.7, Solomonoff induction: the prediction half of Legg's chapter 2. It's a deliberate choice. The rest of the chapter makes ``\xi`` act. AIXI (§2.10) takes the actions with the most reward expected under ``\xi``, and Legg's universal intelligence (chapter 4) scores an agent by its reward in every computable environment, weighed by ``2^{-K}``. Both are built on ``\xi``, which is why we stopped here: prediction is the more fundamental idea. We may come back to the agent half in a future update of this notebook.
 """
 
 # ╔═╡ 71391962-660d-5d7f-86ab-c9319fa462ad
 md"""
 ## Appendix: helpers
 
-The chance of a bit, number formatting, a threaded map, and the chart style.
+Number formatting, a threaded map, and the chart style.
 """
 
 # ╔═╡ 704d8f96-cd78-5ddf-9a90-30cb68d4dc6a
@@ -431,43 +536,37 @@ fixed(x, d = 1) = Printf.format(Printf.Format("%.$(d)f"), x)
 
 # ╔═╡ 28d1adda-8b0c-43c7-a18b-a89d7cc5028d
 md"""
-No program is the start of another, so the flips spell at most one program, and the weights can't sum past 1. Here they sum to $(fixed(sum(WEIGHTS), 2)): the rest is the chance of spelling a program the language can write but the list leaves out, of order 3 and up or precision 4 and up.
+No program is the start of another, so the flips spell at most one program, and the weights add up to at most 1. Over the whole language they add up to exactly 1: each unary field ends at its first 0, which comes with chance 1/2 + 1/4 + 1/8 + ⋯ = 1, so the flips always spell some program. On our list they sum to $(fixed(sum(WEIGHTS), 2)): the rest is the chance of spelling a program the language can write but the list leaves out, of order 3 and up or precision 4 and up.
 
-A weight depends only on its program's length, not on how many other programs there are, so the list can grow without taking anything from the programs already on it. Legg's prior (Def. 2.5.3) is the same, with one weight per predictor: ``2^{-K}``.
+> Legg's prior (Def. 2.5.3) is the same, with one weight per predictor: ``2^{-K}``.
 """
 
-# ╔═╡ 6c0f2e1a-722d-5a88-ba33-39c262e1e4f3
+# ╔═╡ ca4ece31-c355-5b7b-ba80-05518918610d
 md"""
-## Fee, regret and doubt
-
-Suppose the bits come from one predictor on the list, the truth ``\mu``, and ``\xi`` isn't told which. What does not knowing cost? Count it in bits. ``\xi``'s *regret* is how many more bits it needs for the sequence than the truth does:
+Counted in bits, the product becomes a sum. Take ``-\log_2`` of both sides:
 
 ```math
-\text{regret}_t = -\log_2 \xi(x_{1:t}) - \bigl(-\log_2 \mu(x_{1:t})\bigr).
+\underbrace{-\log_2 W_\mu(x)}_{\text{owed}_t} \;=\; \underbrace{-\log_2 W_\mu}_{\text{price}} \;-\; \underbrace{\log_2 \frac{\mu(x)}{\xi(x)}}_{\text{paid}_t}.
 ```
 
-Legg never names this quantity; *regret* is MDL's word.
-
-The *fee* is the price of naming the truth: the bits it takes to say which predictor ``\mu`` is, with the weights as the code. That's ``-\log_2`` of the total weight on ``\mu``'s programs, at most the length of its shortest program, our ``K(\mu)``, and less when it has several. The fair coin has three, `00`, `100` and `1100`, whose weights add up to 7/16, so its fee is $(fixed(fee(predictor(0, 0, [1/2])), 2)) bits, though its shortest program has 2.
-
-``\xi`` is never told the name, but it pays for it anyway, in installments, through the data.
+The *price* is the bits it takes to name ``\mu``, with the weights as the code. It's at most the length of ``\mu``'s shortest program, our ``K(\mu)``, and less when ``\mu`` has several. The fair coin has three, `00`, `100` and `1100`, whose weights add up to 7/16, so its price is $(fixed(price(predictor(0, 0, [1/2])), 2)) bits, though its shortest program has 2.
 """
 
 # ╔═╡ 104348f3-a806-593a-9ba0-9f4d8299dc7c
 md"""
-Before the first bit, the regret is already $(fixed(STARTING_REGRET, 2)) bits: ``-\log_2`` of the weights' total, $(fixed(sum(WEIGHTS), 2)). That's ``\xi``'s stake on the programs left off the list, which it never wins back, so the doubt starts at the rest of the fee.
+For our list, before the first bit, ``\xi`` has already paid $(fixed(PAID_UPFRONT, 2)) bits: ``-\log_2`` of the weights' total, $(fixed(sum(WEIGHTS), 2)). That's its stake on the programs left off the list, which it never wins back, so it starts out owing the rest of the price.
 """
 
 # ╔═╡ a47f5125-3bd6-59a7-94c6-ed0aeb7fd301
 let rows = map(SOURCES) do (; name, μ)
-        "| $name | `$(program(μ))` | $(length(program(μ))) | $(count(programs_for(μ))) | $(fixed(fee(μ), 2)) |"
+        "| $name | `$(program(μ))` | $(length(program(μ))) | $(count(programs_for(μ))) | $(fixed(price(μ), 2)) |"
     end
     Markdown.parse("""
-    | source | program | ``\\ell`` | programs for it | fee |
+    | source | program | ``\\ell`` | programs for it | price |
     |:--|:--|--:|--:|--:|
     $(join(rows, "\n"))
 
-    Most sources have one program that dominates, so their fee is about its length.
+    Most sources have one program that dominates, so their price is about its length.
     """)
 end
 
@@ -477,13 +576,13 @@ commas(n::Integer) = replace(string(n), r"(?<=\d)(?=(\d{3})+$)" => ",")
 
 # ╔═╡ e223181b-546d-526a-8f1d-a1f959bc3aeb
 md"""
-The list holds $(commas(length(PREDICTORS))) predictors.
+The list holds $(commas(length(PREDICTORS))) programs. Some describe the same predictor: the fair coin is `00`, but also `100` and `1100`, orders 1 and 2 with every chance ½. To find them, compare what programs predict in every context:
 """
 
 # ╔═╡ 97700adc-8d57-5055-b652-e03984aa6501
-let gap = maximum(maximum(abs.(e.regret .+ e.doubt .- fee(s.μ))) for (s, e) in zip(SOURCES, EXAMPLES))
+let gap = maximum(maximum(abs.(e.paid .+ e.owed .- price(s.μ))) for (s, e) in zip(SOURCES, EXAMPLES))
     md"""
-    On all four sequences, regret + doubt matches the fee to within $(@sprintf("%.0e", gap)) bits, at every step.
+    On all four sequences, paid + owed matches the price to within $(@sprintf("%.0e", gap)) bits, at every step.
 
     Now $(commas(RUNS)) sequences from each source:
     """
@@ -493,7 +592,7 @@ end
 md"""
 ### In predictions, on average
 
-``S_t`` is an average over every sequence ``\mu`` could produce, so we estimate it from the same $(commas(RUNS)) sequences per source, ± 2 standard errors. The bound is ``\frac{\ln 2}{2}`` times the fee:
+``S_t`` is an average over every sequence ``\mu`` could produce, so we estimate it from the same $(commas(RUNS)) sequences per source, ± 2 standard errors. The bound is ``\frac{\ln 2}{2}`` times the price:
 """
 
 # ╔═╡ 72ed5461-7de0-5be6-9e20-b2070b71b343
@@ -501,18 +600,17 @@ md"""
 tmap(f, xs) = fetch.([Threads.@spawn f(x) for x in xs])
 
 # ╔═╡ 0314eace-722a-5c30-9edc-4ee05acf1020
-# Every source's regret and running Σ(ξ − μ)², one column per sequence.
-# 4,000 sequences; under a minute on 10 threads.
+# `RUNS` sequences per source, one column per sequence.
 TRIALS = map(SOURCES) do (; μ)
-    runs = tmap(seed -> let o = draw(μ, seed); (o.regret, o.S) end, 1:RUNS)
-    (regret = reduce(hcat, first.(runs)), S = reduce(hcat, last.(runs)))
+    runs = tmap(seed -> let o = trial(μ, seed); (o.paid, o.S) end, 1:RUNS)
+    (paid = reduce(hcat, first.(runs)), S = reduce(hcat, last.(runs)))
 end
 
 # ╔═╡ 2f6b3cb7-1efb-5826-b335-c532f8d011f1
-let over = sum(count(>(fee(s.μ) + 1e-9), maximum(e.regret; dims = 1)) for (s, e) in zip(SOURCES, TRIALS)),
-    lowest = minimum(minimum(e.regret) for e in TRIALS)
+let over = sum(count(>(price(s.μ) + 1e-9), maximum(e.paid; dims = 1)) for (s, e) in zip(SOURCES, TRIALS)),
+    lowest = minimum(minimum(e.paid) for e in TRIALS)
     md"""
-    Of all $(commas(length(SOURCES) * RUNS)) sequences, $(over == 0 ? "none" : over) ever pass their fee. But some fall far below 0, as low as $(fixed(lowest)) bits: when the data happens to look like another predictor's, ``\xi`` follows it and beats the truth. The fee only limits how much ``\xi`` can lose.
+    ``\xi`` pays more than the price on $(over == 0 ? "none" : over) of the $(commas(length(SOURCES) * RUNS)) sequences. But on some, what it has paid falls far below 0, as low as $(fixed(lowest)) bits: when the bits happen to look like another predictor's, ``\xi`` follows it and beats the truth. The price limits only how much ``\xi`` can lose.
     """
 end
 
@@ -522,7 +620,7 @@ let
         final = S[end, :]
         mean = sum(final) / RUNS
         se = sqrt(sum(abs2, final .- mean) / (RUNS - 1) / RUNS)
-        bound = log(2) / 2 * fee(μ)
+        bound = log(2) / 2 * price(μ)
         (; name, mean, se, bound, above = count(>(bound), final))
     end
     rows = ["| $(s.name) | $(fixed(s.mean, 3)) ± $(fixed(2s.se, 3)) | $(fixed(s.bound, 3)) | $(s.above) |" for s in stats]
@@ -556,14 +654,35 @@ THEME = Theme(
     Legend = (framevisible = false, backgroundcolor = VIZ.surface),
 );
 
+# ╔═╡ 634f41b9-e54e-55a8-a517-67ab466e5494
+let path = weights_along(TEN_BITS)
+    shares = map(path) do w
+        leaders = [sum(w[programs_for(ν)]) for (_, ν) in LEADERS]
+        [leaders; 1 - sum(leaders)]
+    end
+    labels = [first.(LEADERS); "everything else"]
+    colors = [SERIES_COLORS; "#c8c7c0"]
+    groups = repeat(eachindex(labels); outer = length(path))
+    with_theme(THEME) do
+        fig = Figure(size = (760, 440))
+        ax = Axis(fig[1, 1]; xlabel = "bits seen", ylabel = "share of the weight", xticks = 0:length(TEN_BITS),
+                  title = "Ten bits of alternation move the budget from the fair coin to the alternators")
+        barplot!(ax, repeat(0:length(TEN_BITS); inner = length(labels)), reduce(vcat, shares);
+                 stack = groups, color = colors[groups], gap = 0.25)
+        ylims!(ax, 0, 1)
+        Legend(fig[2, 1], [PolyElement(color = c) for c in colors], labels; orientation = :horizontal)
+        fig
+    end
+end
+
 # ╔═╡ c0e0be39-665b-5fce-92e5-00b755be7543
 with_theme(THEME) do
     fig = Figure(size = (760, 460))
-    ax = Axis(fig[1, 1]; xscale = log10, xlabel = "bits seen", ylabel = "regret (bits)",
-              title = "Each regret climbs, then flattens at its fee (dashed)")
-    for ((; name, μ), (; regret), color) in zip(SOURCES, EXAMPLES, SERIES_COLORS)
-        hlines!(ax, fee(μ); color, linestyle = :dash, linewidth = 1)
-        lines!(ax, 1:N, regret; color, linewidth = 2, label = name)
+    ax = Axis(fig[1, 1]; xscale = log10, xlabel = "bits seen", ylabel = "paid (bits)",
+              title = "What ξ pays climbs, then flattens at the price (dashed)")
+    for ((; name, μ), (; paid), color) in zip(SOURCES, EXAMPLES, SERIES_COLORS)
+        hlines!(ax, price(μ); color, linestyle = :dash, linewidth = 1)
+        lines!(ax, 1:N, paid; color, linewidth = 2, label = name)
     end
     Legend(fig[2, 1], ax; orientation = :horizontal)
     fig
@@ -572,31 +691,31 @@ end
 # ╔═╡ 8b85a889-8683-515d-b641-79368ec90f80
 with_theme(THEME) do
     fig = Figure(size = (760, 580))
-    for (i, ((; name, μ), (; regret, doubt))) in enumerate(zip(SOURCES, EXAMPLES))
-        ax = Axis(fig[fldmod1(i, 2)...]; xscale = log10, title = "$name: fee $(fixed(fee(μ), 2))",
+    for (i, ((; name, μ), (; paid, owed))) in enumerate(zip(SOURCES, EXAMPLES))
+        ax = Axis(fig[fldmod1(i, 2)...]; xscale = log10, title = "$name: price $(fixed(price(μ), 2))",
                   xlabel = i > 2 ? "bits seen" : "", ylabel = isodd(i) ? "bits" : "")
-        band!(ax, 1:N, zeros(N), regret; color = (SERIES_COLORS[1], 0.6))
-        band!(ax, 1:N, regret, regret .+ doubt; color = (SERIES_COLORS[4], 0.4))
-        hlines!(ax, fee(μ); color = VIZ.text, linestyle = :dash, linewidth = 1)
+        band!(ax, 1:N, zeros(N), paid; color = (SERIES_COLORS[1], 0.6))
+        band!(ax, 1:N, paid, paid .+ owed; color = (SERIES_COLORS[4], 0.4))
+        hlines!(ax, price(μ); color = VIZ.text, linestyle = :dash, linewidth = 1)
     end
     Legend(fig[3, 1:2],
            [PolyElement(color = (SERIES_COLORS[1], 0.6)), PolyElement(color = (SERIES_COLORS[4], 0.4))],
-           ["regret: paid", "doubt: still owed"]; orientation = :horizontal)
+           ["paid", "owed"]; orientation = :horizontal)
     fig
 end
 
 # ╔═╡ 77f6c10b-7c89-5e29-8879-76f2a6f66baf
 with_theme(THEME) do
     fig = Figure(size = (760, 520))
-    for (i, ((; name, μ), (; regret), color)) in enumerate(zip(SOURCES, TRIALS, SERIES_COLORS))
+    for (i, ((; name, μ), (; paid), color)) in enumerate(zip(SOURCES, TRIALS, SERIES_COLORS))
         ax = Axis(fig[fldmod1(i, 2)...]; xscale = log10, title = name,
-                  xlabel = i > 2 ? "bits seen" : "", ylabel = isodd(i) ? "regret (bits)" : "")
+                  xlabel = i > 2 ? "bits seen" : "", ylabel = isodd(i) ? "paid (bits)" : "")
         for j in 1:SHOWN
-            lines!(ax, 1:N, regret[:, j]; color = (color, 0.15))
+            lines!(ax, 1:N, paid[:, j]; color = (color, 0.15))
         end
-        hlines!(ax, fee(μ); color = VIZ.text, linestyle = :dash, linewidth = 1)
+        hlines!(ax, price(μ); color = VIZ.text, linestyle = :dash, linewidth = 1)
     end
-    Label(fig[0, :], "$SHOWN sequences per source; the fee is dashed"; halign = :left, color = VIZ.text2)
+    Label(fig[0, :], "$SHOWN sequences per source; the price is dashed"; halign = :left, color = VIZ.text2)
     fig
 end
 
@@ -604,7 +723,7 @@ end
 with_theme(THEME) do
     fig = Figure(size = (760, 520))
     for (i, ((; name, μ), (; S), color)) in enumerate(zip(SOURCES, TRIALS, SERIES_COLORS))
-        bound = log(2) / 2 * fee(μ)
+        bound = log(2) / 2 * price(μ)
         ax = Axis(fig[fldmod1(i, 2)...]; xscale = log10, title = name,
                   xlabel = i > 2 ? "bits seen" : "", ylabel = isodd(i) ? "Σ (ξ − μ)²" : "")
         for j in 1:SHOWN
@@ -2603,6 +2722,14 @@ uuid = "23338594-aafe-5451-b93e-139f81909106"
 # ╠═c9a17ceb-a92d-51cc-b89d-506fa05fc193
 # ╠═0eac926e-f5ac-4854-b88d-1650031004fa
 # ╟─bfa94811-1dd0-4bdc-81e7-3d71a0433faf
+# ╟─d013c228-c565-4b44-8e2b-b62bf520e6d8
+# ╠═ed295beb-ac4d-558a-a933-fa512c4b14f1
+# ╠═ae285ef6-24d8-53e8-9212-7093a98b5996
+# ╟─a586f028-7139-4df9-a28c-1a229a782c45
+# ╠═fadc1764-1b80-5912-87ad-80040c7bb536
+# ╟─e223181b-546d-526a-8f1d-a1f959bc3aeb
+# ╠═20d72b26-89e2-53ff-8c33-15fed8880aa1
+# ╠═4195c305-897c-59e5-a916-570c19b2a8ea
 # ╟─bfeacea6-0693-4a05-a48c-a371b2d9f198
 # ╠═ca52db12-954f-55d9-b71e-81a24e630d59
 # ╟─43e64bb7-9da7-4066-a124-3b999164c722
@@ -2612,34 +2739,41 @@ uuid = "23338594-aafe-5451-b93e-139f81909106"
 # ╟─d1af595e-6a01-45fd-8885-1068e5a2dcd4
 # ╠═14956fcc-0dd5-5271-8230-c434cbe22bfa
 # ╟─ff744d04-317b-42ce-9217-22a05535dc7f
-# ╟─d013c228-c565-4b44-8e2b-b62bf520e6d8
-# ╠═ed295beb-ac4d-558a-a933-fa512c4b14f1
-# ╠═ae285ef6-24d8-53e8-9212-7093a98b5996
-# ╟─a586f028-7139-4df9-a28c-1a229a782c45
-# ╠═fadc1764-1b80-5912-87ad-80040c7bb536
-# ╟─e223181b-546d-526a-8f1d-a1f959bc3aeb
+# ╠═c10841f5-ec8d-415c-84a6-216611f5074c
+# ╠═afdc66a8-40d9-54c1-9a04-6862b90e2f4d
+# ╟─d0c35b35-3ffa-59cd-bf7d-8c551ab00845
 # ╟─ab726d26-082c-4c83-b20c-063d45f438b3
 # ╠═69c7a1fb-4ccf-5622-a0fb-fcedd41c9ab5
 # ╟─28d1adda-8b0c-43c7-a18b-a89d7cc5028d
-# ╠═20d72b26-89e2-53ff-8c33-15fed8880aa1
-# ╠═4195c305-897c-59e5-a916-570c19b2a8ea
 # ╟─40f37aae-7096-519f-81e6-ac14fd65dec5
+# ╠═db7c766c-5609-519c-818d-d51b0b8407ce
+# ╟─e4b8adb2-fc28-4390-a563-25bd3ac64fd6
+# ╠═9bf87089-2b58-5388-b04a-5cdf527ebee0
+# ╠═0767132c-ef65-5b65-8d30-d7413b06e1ef
+# ╠═f29b720f-66bc-5730-84ec-83c897fef1bc
+# ╟─9b1d9232-85e9-5be2-8cdd-1d3b3203d271
+# ╠═e919d87b-6530-5def-a0cd-79ec01fd46b9
+# ╟─949dd8cc-dbe5-5200-a20e-f31f7cd8af51
+# ╟─634f41b9-e54e-55a8-a517-67ab466e5494
+# ╠═da958c7c-b6ee-5384-b106-de96d63dbf87
+# ╟─e2306bfc-c7d9-4ac8-b8c8-5cd6da4e8af6
+# ╠═eefa07df-af38-5faf-9e45-1876af0b0389
+# ╟─e6bebb61-e47d-5363-8152-1ba43837e636
 # ╟─6c0f2e1a-722d-5a88-ba33-39c262e1e4f3
+# ╟─ca4ece31-c355-5b7b-ba80-05518918610d
 # ╠═07693073-f6a5-58c2-9a99-5003ed13b613
+# ╟─4e2fd55e-500b-4b26-a542-b1580f962635
 # ╟─e711492e-b1ef-56f4-86dd-6168f3b92a23
-# ╟─104348f3-a806-593a-9ba0-9f4d8299dc7c
 # ╠═7c7ee428-0693-5196-9f70-c16bb7178624
+# ╟─104348f3-a806-593a-9ba0-9f4d8299dc7c
 # ╟─bccd5d9c-0d2b-5cfe-bb9e-354f6dc49c40
 # ╟─f0b0efeb-cce2-5461-8f7c-f20cce5ba8c1
 # ╟─de44bd39-1e6e-52b3-b187-2d82e8bea8fb
-# ╟─cbd05755-649f-5782-a020-43515d528fc8
 # ╠═ddfbda75-1b44-5501-a9dc-8b421b87771a
-# ╠═a1767280-2cc6-55d8-ba38-498a4f923a76
 # ╟─a47f5125-3bd6-59a7-94c6-ed0aeb7fd301
 # ╟─b1c2acb1-878c-5e54-b0b4-bae24b84c0a5
 # ╠═6608cd0a-e892-5ca5-851e-e88dbb3df674
-# ╠═9bf87089-2b58-5388-b04a-5cdf527ebee0
-# ╠═f85bf2be-2521-5234-b315-749fe81d9ffe
+# ╠═a1767280-2cc6-55d8-ba38-498a4f923a76
 # ╠═364bb9bb-dbb8-5bcf-a639-a3aa958fca4c
 # ╟─120b372d-e133-5d3f-9742-fb115ea82ad7
 # ╠═ddc467e0-9956-567f-a678-b614a402e47e
@@ -2655,6 +2789,9 @@ uuid = "23338594-aafe-5451-b93e-139f81909106"
 # ╟─e9341e50-d24e-50c3-8a63-c6a0d5d11925
 # ╟─790985b6-c3c8-564f-8216-c443092cd97b
 # ╟─78797b07-984c-512d-8a72-ced0da21df6a
+# ╟─9237f845-61c5-5b63-9363-a1dac0a6e75a
+# ╟─baf84fac-12da-50b2-923b-61883ba2d5e5
+# ╟─bee35bd4-698d-563c-879f-2cf80429f8e8
 # ╟─71391962-660d-5d7f-86ab-c9319fa462ad
 # ╠═704d8f96-cd78-5ddf-9a90-30cb68d4dc6a
 # ╠═08c82a03-9fa4-5b9d-a374-b5563d56bbf1
