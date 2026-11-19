@@ -140,7 +140,7 @@ That's `101101100`, and it reads:
 
 It predicts alternation, broken one time in eight. The shortest program is the fair coin's, `00`: order 0, precision 0, and one chance that takes no bits.
 
-This is Grünwald's very crude code for Markov chains ([tutorial](https://arxiv.org/abs/math/0406077), Example 2.8), with the precision written into the program, so the list is the same for any amount of data.
+This is Grünwald's very crude code for Markov chains ([tutorial](https://arxiv.org/abs/math/0406077), Example 2.8), with one change. He writes each chance as a count out of ``n``, so his list depends on how much data there is. We write the precision into the program, so one list serves every ``n``.
 """
 
 # ╔═╡ d013c228-c565-4b44-8e2b-b62bf520e6d8
@@ -249,13 +249,13 @@ WEIGHTS = [exp2(-length(program(ν))) for ν in PREDICTORS]
 
 # ╔═╡ 40f37aae-7096-519f-81e6-ac14fd65dec5
 md"""
-The bet, Legg's ``\xi`` (Def. 2.5.4), adds up every predictor's chance of ``x``, times its weight:
+The bet, Legg's ``\xi`` (Def. 2.5.4), adds up every program's chance of ``x``, times its weight, so a predictor with several programs counts once for each:
 
 ```math
 \xi(x) = \sum_\nu 2^{-\ell(\nu)}\, \nu(x).
 ```
 
-That gives every sequence a chance, so ``\xi`` is itself a predictor. Its chance of a 1 after ``x``:
+That gives every sequence a chance, so ``\xi`` can predict too, though not from the last ``k`` bits: its chance of a 1 after ``x`` depends on all of ``x``:
 
 ```math
 \xi(1 \mid x) = \frac{\xi(x1)}{\xi(x)} = \sum_\nu \frac{2^{-\ell(\nu)}\, \nu(x)}{\xi(x)}\; \nu(1 \mid x).
@@ -328,7 +328,7 @@ ANSWER = mix(last(weights_along(TEN_BITS)), TEN_BITS, 11)
 
 # ╔═╡ e6bebb61-e47d-5363-8152-1ba43837e636
 md"""
-Ten bits of alternation moved the weight from the short programs, which predicted them poorly, to the alternators, which predicted them well. But the weight is spread over alternators of different sharpness, and the fair coin still keeps some: ten bits can't rule it out. No predictor on our list is certain, and neither is the bet.
+Ten bits of alternation moved the weight from the short programs, which predicted them poorly, to the alternators, which predicted them well. But the weight is spread over alternators of different sharpness, and the fair coin still keeps some: ten bits can't rule it out. No predictor on our list is certain, and neither is the bet: an average of their chances can never be surer than 15/16.
 """
 
 # ╔═╡ 6c0f2e1a-722d-5a88-ba33-39c262e1e4f3
@@ -402,7 +402,9 @@ What ``\xi`` owes can't fall below 0, so on every sequence,
 
 It caps what ``\xi`` pays, not what it gets back: misleading bits can take what it has paid below 0, putting it ahead of the truth, for now.
 
-Nothing here needs ``\mu`` to be the truth. Against any predictor ``\nu`` on the list, on any sequence, ``\xi`` needs at most the price of ``\nu`` more bits than ``\nu`` does, so it never needs more than notebook 03's two-part code: name ``\nu``, then send the bits with its help. ``\xi`` does nearly as well as the best predictor on the list, whichever that turns out to be, without ever choosing one. Betting on whichever predictor leads so far has no such guarantee: its bill is a patchwork of the predictors it trusted along the way, and nothing bounds it by the best of them.
+Nothing here needs ``\mu`` to be the truth. Against any predictor ``\nu`` on the list, on any sequence, ``\xi`` needs at most the price of ``\nu`` more bits than ``\nu`` does, so it never needs more than notebook 03's two-part code: name ``\nu``, then send the bits with its help. ``\xi`` does nearly as well as the best predictor on the list, whichever that turns out to be, without ever choosing one.
+
+Betting on whichever predictor leads so far has no such guarantee. Give it two coins, at 1/4 and 3/4, and bits that always go against the leader (they come out alternating): it pays 2 bits a bit, while either coin alone pays about 1.2.
 
 > Legg's *dominance* (p. 36), ``2^{K(\mu)}\, \xi(x) \ge \mu(x)``, is the same bound in probability, with ``K(\mu)`` in place of the price.
 """
@@ -419,7 +421,9 @@ Solomonoff's convergence theorem (Legg's Theorem 2.7.1) states the promise in pr
 
 where ``S_t`` is the squared gap between ``\xi``'s chance of a 1 and ``\mu``'s at step ``t``, averaged over every history ``\mu`` could produce.
 
-Unlike Claim 1, this one holds only on average. Averaged over every history, each bit costs ``\xi`` something, and the further its prediction is from the truth's, the more: at least ``\frac{2}{\ln 2}`` bits times the squared gap. All of it comes out of the price, so
+Infinitely many squared gaps, and a finite total: the gaps must shrink to 0. Whatever ``\mu`` is, ``\xi``'s predictions converge to ``\mu``'s, without ``\xi`` ever having to single out ``\mu``'s program.
+
+Unlike Claim 1, this one holds only on average. Averaged over every history, each bit costs ``\xi`` something, and the further its prediction is from the truth's, the more: at least ``\frac{2}{\ln 2}`` bits times the squared gap. Claim 1 caps what ``\xi`` pays on every sequence, so on average too: all of it comes out of the price, and
 
 ```math
 \sum_t S_t \le \frac{\ln 2}{2}\, \text{price}:
@@ -427,7 +431,7 @@ Unlike Claim 1, this one holds only on average. Averaged over every history, eac
 
 Solomonoff's theorem, with the price in place of ``K(\mu)``. On a single sequence, it can fail: a misleading bit refunds what ``\xi`` has paid, but nothing refunds a squared gap.
 
-> The two steps have names: a bit's average cost is a KL divergence, and Pinsker's inequality bounds it below by the squared gap. Legg's sketch of the proof (p. 39) works with the same sum, in nats.
+> The two steps have names: a bit's average cost is a KL divergence, never negative (notebook 04), and Pinsker's inequality bounds it below by the squared gap. Legg's sketch of the proof (p. 39) works with the same sum, in nats.
 """
 
 # ╔═╡ de44bd39-1e6e-52b3-b187-2d82e8bea8fb
@@ -492,13 +496,47 @@ md"""
 # ╔═╡ 94fc4917-ac38-51c9-892d-1ac751e4c3a1
 RUNS = 1000
 
+# ╔═╡ 1ee88810-ebd2-5f59-986a-8da7523aad6e
+md"""
+Drawing from a source is the easy test of a claim about every sequence. The hard test builds a sequence against ``\xi``: each bit is the one ``\xi`` gives less chance.
+"""
+
+# ╔═╡ cc976cec-b99f-53ac-a43e-b36d2e329785
+"`n` bits built against ξ: each is the bit ξ gives less chance, or a 0 on a tie."
+against(n) =
+    first(
+        foldl(1:n; init = (Int[], WEIGHTS ./ sum(WEIGHTS))) do (x, w), t
+        push!(x, mix(w, x, t) < 1 / 2 ? 1 : 0)
+        (x, update(w, predictions_at(x, t), x[t]))
+    end)
+
 # ╔═╡ 78797b07-984c-512d-8a72-ced0da21df6a
 md"""
 ## The full picture
 
-Our list stops at order 2 and precision 3, and both claims need the truth to be on it. What if it isn't: a coin at 0.3, say? No program names it, so ``\xi`` never stops paying. It settles on the nearest chance, 5/16, and pays a little on every bit, so what it has paid grows in step with the bits.
+Our list stops at order 2 and precision 3, and both claims need the truth to be on it. What if it isn't: a coin at 0.3, say? No program of ours names it, at any precision. Here is what ``\xi`` pays for its bits, betting on coins alone, with precision capped at 3, as on our list, and at 16, more than a million bits can use:
+"""
 
-More precision helps, but not for free. Each extra bit of precision halves the cell around 0.3, and adds two bits to the program: one to the unary precision, one to the chance. And a finer chance only pays off once the data can tell it from its neighbours, which takes a sequence four times as long for each halving. So on a list whose precision never runs out, ``\xi`` keeps moving to finer chances as the bits come in, and what it pays grows like ``\log n``: notebook 03's COMP again, the log of how many coins the data can tell apart.
+# ╔═╡ 20c2ffe7-f0d1-56a9-9ec9-13b0bc345802
+"""
+What ξ has paid after `n` bits from a coin at 0.3, with ones at exactly 3 in 10, betting on the coins of
+every precision up to `B`. Their weighted chances are summed in log₂, the largest factored out so the rest don't underflow.
+"""
+function paid_on_coin(n, B)
+    ones = round(Int, 3n / 10)
+    loglik(θ) = ones * log2(θ) + (n - ones) * log2(1 - θ)
+    terms = [loglik(θ) - (2b + 2) for b in 0:B for θ in chances(b)]    # a coin's program: 0, unary(b), b bits
+    top = maximum(terms)
+    loglik(0.3) - (top + log2(sum(exp2.(terms .- top))))
+end
+
+# ╔═╡ cd539602-f958-50ee-9819-7f9fea6c7202
+md"""
+The two agree until a few thousand bits, when the data starts to tell 0.3 from 5/16, the nearest chance at precision 3. From then on, the capped ``\xi`` pays a little on every bit, and runs off the chart.
+
+The other keeps moving to finer chances. Each halving of the cell costs two bits of program, one for the chance and one for the unary precision, and needs four times the data to pay off: about a bit per doubling of the data, ``\log_2 n``. The chance's half is notebook 03's COMP, the log of how many coins the data can tell apart. The precision's half is the price of not knowing in advance how much precision the data will justify.
+
+That limit is our language's, not Solomonoff's. A coin at 0.3 is computable, so Legg's list has it, with a short program, and his ``\xi`` pays a constant price for it. Only a coin whose chance has no short program makes his ``\xi`` keep paying, about ``\frac{1}{2} \log_2 n``: COMP again.
 """
 
 # ╔═╡ 9237f845-61c5-5b63-9363-a1dac0a6e75a
@@ -536,7 +574,7 @@ fixed(x, d = 1) = Printf.format(Printf.Format("%.$(d)f"), x)
 
 # ╔═╡ 28d1adda-8b0c-43c7-a18b-a89d7cc5028d
 md"""
-No program is the start of another, so the flips spell at most one program, and the weights add up to at most 1. Over the whole language they add up to exactly 1: each unary field ends at its first 0, which comes with chance 1/2 + 1/4 + 1/8 + ⋯ = 1, so the flips always spell some program. On our list they sum to $(fixed(sum(WEIGHTS), 2)): the rest is the chance of spelling a program the language can write but the list leaves out, of order 3 and up or precision 4 and up.
+No program is the start of another, so the flips spell at most one program, and the weights add up to at most 1. Over the whole language they add up to exactly 1: each unary field ends at its first 0, which comes with chance 1/2 + 1/4 + 1/8 + ⋯ = 1, so the flips always spell some program. On our list, the order's 0 must come within 3 flips, with chance 7/8, and the precision's within 4, with chance 15/16, so the weights sum to 7/8 × 15/16 = $(fixed(sum(WEIGHTS), 2)): the rest is the chance of spelling a program the language can write but the list leaves out, of order 3 and up or precision 4 and up.
 
 > Legg's prior (Def. 2.5.3) is the same, with one weight per predictor: ``2^{-K}``.
 """
@@ -549,7 +587,7 @@ Counted in bits, the product becomes a sum. Take ``-\log_2`` of both sides:
 \underbrace{-\log_2 W_\mu(x)}_{\text{owed}_t} \;=\; \underbrace{-\log_2 W_\mu}_{\text{price}} \;-\; \underbrace{\log_2 \frac{\mu(x)}{\xi(x)}}_{\text{paid}_t}.
 ```
 
-The *price* is the bits it takes to name ``\mu``, with the weights as the code. It's at most the length of ``\mu``'s shortest program, our ``K(\mu)``, and less when ``\mu`` has several. The fair coin has three, `00`, `100` and `1100`, whose weights add up to 7/16, so its price is $(fixed(price(predictor(0, 0, [1/2])), 2)) bits, though its shortest program has 2.
+The *price* is the bits it takes to name ``\mu``, with the weights as the code. It's at most the length of ``\mu``'s shortest program, our ``K(\mu)``, and less when ``\mu`` has several (with Legg's one weight per predictor, it would be exactly ``K(\mu)``). The fair coin has three, `00`, `100` and `1100`, whose weights add up to 7/16, so its price is $(fixed(price(predictor(0, 0, [1/2])), 2)) bits, though its shortest program has 2.
 """
 
 # ╔═╡ 104348f3-a806-593a-9ba0-9f4d8299dc7c
@@ -588,6 +626,16 @@ let gap = maximum(maximum(abs.(e.paid .+ e.owed .- price(s.μ))) for (s, e) in z
     """
 end
 
+# ╔═╡ 5d96ecad-cb6a-5d5b-96d6-c8d68c1c9656
+let x = against(N), w = weights_along(x)
+    ξs = [mix(w[t], x, t) for t in 1:N]
+    paid = PAID_UPFRONT + last(cost(ξs, x)) - N
+    settled = findlast(p -> abs(p - 1 / 2) ≥ 0.01, ξs) + 1
+    md"""
+    They start $(Markdown.Code(join(x[1:30]))). Each one costs ``\xi`` at least 1 bit, so it can never pull ahead of the fair coin, which pays exactly 1 a bit. Yet over $(commas(N)) bits, it pays only $(fixed(paid, 2)) bits more: the fair coin's whole price, and no more. From bit $(settled) on, its predictions stay within 0.01 of ½. The bits built to beat ``\xi`` end up looking like coin flips, and all they can take is the price.
+    """
+end
+
 # ╔═╡ 09c99de7-c2fa-550b-b2c3-7c1e6c82aae5
 md"""
 ### In predictions, on average
@@ -610,7 +658,11 @@ end
 let over = sum(count(>(price(s.μ) + 1e-9), maximum(e.paid; dims = 1)) for (s, e) in zip(SOURCES, TRIALS)),
     lowest = minimum(minimum(e.paid) for e in TRIALS)
     md"""
-    ``\xi`` pays more than the price on $(over == 0 ? "none" : over) of the $(commas(length(SOURCES) * RUNS)) sequences. But on some, what it has paid falls far below 0, as low as $(fixed(lowest)) bits: when the bits happen to look like another predictor's, ``\xi`` follows it and beats the truth. The price limits only how much ``\xi`` can lose.
+    ``\xi`` pays more than the price on $(over == 0 ? "none" : over) of the $(commas(length(SOURCES) * RUNS)) sequences. But on some, what it has paid falls far below 0, as low as $(fixed(lowest)) bits: when the bits happen to look like another predictor's, ``\xi`` follows it and beats the truth.
+
+    The price limits only how much ``\xi`` can lose. What it can win is limited too, by chance: on a sequence from ``\mu``, the chance that what it has paid ever falls ``c`` bits below 0 is at most ``2^{-c}``. Across $(commas(length(SOURCES) * RUNS)) sequences, that makes a low much under $(fixed(-log2(length(SOURCES) * RUNS), 0)) bits unlikely.
+
+    > Averaged over ``\mu``'s sequences of a given length, ``\xi(x)/\mu(x)`` is ``\sum_x \xi(x)``, at most 1. So it reaches ``2^c`` with chance at most ``2^{-c}`` (Markov's inequality), and by Ville's inequality, at any length at all.
     """
 end
 
@@ -623,6 +675,8 @@ let
         bound = log(2) / 2 * price(μ)
         (; name, mean, se, bound, above = count(>(bound), final))
     end
+    # what ξ still owes after N bits, on average, is the price less what it has paid
+    left = maximum(log(2) / 2 * (price(s.μ) - sum(t.paid[end, :]) / RUNS) for (s, t) in zip(SOURCES, TRIALS))
     rows = ["| $(s.name) | $(fixed(s.mean, 3)) ± $(fixed(2s.se, 3)) | $(fixed(s.bound, 3)) | $(s.above) |" for s in stats]
     above = [s.above for s in stats]
     Markdown.parse("""
@@ -631,6 +685,8 @@ let
     $(join(rows, "\n"))
 
     Every mean is under its bound, while $(minimum(above)) to $(maximum(above)) of each source's $(commas(RUNS)) sequences end above it: the bound holds on average, not sequence by sequence.
+
+    We stopped at bit $(commas(N)), but the sums run forever. What they leave out comes out of what ``\\xi`` still owes, as Claim 2's sum came out of the price, so on average it's no more than ``\\frac{\\ln 2}{2}`` times that: $(fixed(left, 3)) at the most, for any source.
     """)
 end
 
@@ -736,6 +792,23 @@ with_theme(THEME) do
     Label(fig[0, :], "$SHOWN sequences per source; the mean of all $(commas(RUNS)) is black, the bound dashed";
           halign = :left, color = VIZ.text2)
     fig
+end
+
+# ╔═╡ 97a0f4d3-d7df-58b2-871a-0a59c0d0c27b
+let ns = round.(Int, exp10.(1:0.1:6))
+    with_theme(THEME) do
+        fig = Figure(size = (760, 460))
+        ax = Axis(fig[1, 1]; xscale = log10, xlabel = "bits seen", ylabel = "paid (bits)",
+                  title = "A coin at 0.3: capped precision pays on every bit, unlimited about a bit per doubling")
+        lines!(ax, ns, paid_on_coin.(ns, MAX_PRECISION); color = SERIES_COLORS[1], linewidth = 2,
+               label = "precision up to $MAX_PRECISION")
+        lines!(ax, ns, paid_on_coin.(ns, 16); color = SERIES_COLORS[2], linewidth = 2, label = "precision up to 16")
+        lines!(ax, ns, log2.(ns); color = VIZ.text, linestyle = :dash, linewidth = 1, label = "log₂ n")
+        lines!(ax, ns, log2.(ns) / 2; color = VIZ.text2, linestyle = :dot, linewidth = 1.5, label = "½ log₂ n, COMP's rate")
+        ylims!(ax, 0, 25)
+        Legend(fig[2, 1], ax; orientation = :horizontal)
+        fig
+    end
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -2785,10 +2858,16 @@ uuid = "23338594-aafe-5451-b93e-139f81909106"
 # ╠═0314eace-722a-5c30-9edc-4ee05acf1020
 # ╟─77f6c10b-7c89-5e29-8879-76f2a6f66baf
 # ╟─2f6b3cb7-1efb-5826-b335-c532f8d011f1
+# ╟─1ee88810-ebd2-5f59-986a-8da7523aad6e
+# ╠═cc976cec-b99f-53ac-a43e-b36d2e329785
+# ╟─5d96ecad-cb6a-5d5b-96d6-c8d68c1c9656
 # ╟─09c99de7-c2fa-550b-b2c3-7c1e6c82aae5
 # ╟─e9341e50-d24e-50c3-8a63-c6a0d5d11925
 # ╟─790985b6-c3c8-564f-8216-c443092cd97b
 # ╟─78797b07-984c-512d-8a72-ced0da21df6a
+# ╠═20c2ffe7-f0d1-56a9-9ec9-13b0bc345802
+# ╟─97a0f4d3-d7df-58b2-871a-0a59c0d0c27b
+# ╟─cd539602-f958-50ee-9819-7f9fea6c7202
 # ╟─9237f845-61c5-5b63-9363-a1dac0a6e75a
 # ╟─baf84fac-12da-50b2-923b-61883ba2d5e5
 # ╟─bee35bd4-698d-563c-879f-2cf80429f8e8
