@@ -31,13 +31,13 @@ A process ``\mu`` produces a bit sequence. Here are the first ten bits:
 
 What's the chance the next bit is a 1?
 
-Alternation says it's certain. But a process that alternates for ten bits and then prints only 0s fits them just as well, and so do endlessly many others. Even if we know that some program computes ``\mu``, no run of bits, however long, singles that program out.
+Alternation says it's certain. But a process that alternates for ten bits, then prints only 0s, fits just as well, and so do endlessly many others. Even if we know that some program computes ``\mu``, no run of bits, however long, singles that program out.
 
 Solomonoff's answer is not to choose. Bet on every predictor a program can describe, all at once, and bet more on those with shorter programs: alternation takes a few bits to write, while the switch to 0s must also spell out when it happens, so its program is longer.
 
 The bet is a mixture of all of them, written ``\xi``.
 
-Its promise (Theorem 2.7.1) is that whatever the true process ``\mu``, the mixture's total error stays below a constant, proportional to ``K(\mu)``, ``\mu``'s *Kolmogorov complexity*: the length of the shortest program that computes it. It's notebook 02's ``K``, for a process instead of a string.
+Its promise (Theorem 2.7.1) is that whatever the true process ``\mu``, the mixture's total error stays below a constant, proportional to ``K(\mu)``, ``\mu``'s *Kolmogorov complexity*: the length of the shortest program that computes it. It's notebook 02's ``K`` for a process.
 
 ``\xi`` can't be computed, since its list holds every program. So we build a small one, short enough to write out, and check its promise empirically, in two ways:
 
@@ -58,14 +58,14 @@ A *predictor* reads the last ``k`` bits and gives the chance that the next one i
 
 We call ``k`` its *order*, and the last ``k`` bits its *context*. There are ``2^k`` possible contexts, and a predictor of order ``k`` gives a chance for each of them.
 
-To write a predictor down as a program, a string of bits, we encode its order and its ``2^k`` chances, so that a reader can tell where each part ends.
+To write a predictor down as a program, a string of bits, we have to encode its order and its ``2^k`` chances.
 
 The order is simple. We write it in unary, which marks its own end with a 0:
 """
 
 # ╔═╡ 26956974-c66e-5449-8757-79b8acacbc04
 """
-`n` in unary: `n` ones, then a zero.
+`n` in unary: `n` ones, then a zero, so a reader can tell where it ends.
 
     unary(0) == "0"
     unary(1) == "10"
@@ -84,7 +84,7 @@ b = 1   [       1/4       |       3/4       ]
 b = 2   [  1/8   |  3/8   |  5/8   |  7/8   ]
 ```
 
-So no chance is ever 0 or 1: no predictor is ever certain, and no bit can cost it infinitely many bits.
+So no chance is ever 1 or 0: no prediction is ever certain, or infinitely costly.
 """
 
 # ╔═╡ 94769f6a-50c6-5099-80af-8566c99deb74
@@ -104,8 +104,6 @@ Now we can name a predictor in three fields:
 1. the order ``k``, in unary;
 2. the precision ``b``, in unary as well;
 3. the ``2^k`` chances, ``b`` bits each.
-
-Each field tells where it ends: the unary ones at their 0, and the chances after exactly ``2^k b`` bits.
 """
 
 # ╔═╡ 6f460fc0-1c46-5991-800a-2211606e0558
@@ -113,7 +111,7 @@ Each field tells where it ends: the unary ones at their 0, and the chances after
 predictor(k, b, θ) = (order = k, precision = b, θ = collect(θ))
 
 # ╔═╡ 1f353388-be7b-479f-9964-07be2100eb3a
-md"""`program` writes a predictor down, field by field:"""
+md"""`program` writes a predictor down as bits:"""
 
 # ╔═╡ c9a17ceb-a92d-51cc-b89d-506fa05fc193
 """
@@ -127,25 +125,30 @@ function program(ν)
     unary(ν.order) * unary(ν.precision) * join(field.(ν.θ))
 end
 
+# ╔═╡ bce49332-9e80-45bf-ab6a-fdc047cccfd8
+md"""Here is an example program:"""
+
 # ╔═╡ 0eac926e-f5ac-4854-b88d-1650031004fa
 program(predictor(1, 2, [7/8, 1/8]))
 
 # ╔═╡ bfa94811-1dd0-4bdc-81e7-3d71a0433faf
 md"""
-That's `101101100`, and it reads:
+And it reads:
 
 - `10`: order 1, one chance for each value of the last bit;
 - `110`: precision 2;
 - `11` and `00`: a 1 has the chance 7/8 after a 0, and 1/8 after a 1.
 
-It predicts alternation, broken one time in eight. The shortest program is the fair coin's, `00`: order 0, precision 0, and one chance that takes no bits.
+It predicts alternation, broken one time in eight.
 
-This is Grünwald's very crude code for Markov chains ([tutorial](https://arxiv.org/abs/math/0406077), Example 2.8), with one change. He writes each chance as a count out of ``n``, so his list depends on how much data there is. We write the precision into the program, so one list serves every ``n``.
+The shortest program is `00`, the fair coin: order 0, precision 0, and one chance, ½, that takes no bits.
+
+> This is a variant of Grünwald's very crude code for Markov chains ([tutorial](https://arxiv.org/abs/math/0406077), Example 2.8).
 """
 
 # ╔═╡ d013c228-c565-4b44-8e2b-b62bf520e6d8
 md"""
-There are infinitely many programs the language can write, and our compute is finite, so our list stops at a highest order and precision:
+There are infinitely many programs the language can write, and our compute is finite, so we stop at some maximum order and precision:
 """
 
 # ╔═╡ ed295beb-ac4d-558a-a933-fa512c4b14f1
@@ -155,7 +158,7 @@ MAX_ORDER = 2
 MAX_PRECISION = 3
 
 # ╔═╡ a586f028-7139-4df9-a28c-1a229a782c45
-md"""And every program up to those limits:"""
+md"""The list of every program up to those limits:"""
 
 # ╔═╡ fadc1764-1b80-5912-87ad-80040c7bb536
 PREDICTORS = [
@@ -177,7 +180,7 @@ programs_for(μ) = [predictions(ν) == predictions(μ) for ν in PREDICTORS]
 md"""
 ## Making predictions
 
-A predictor predicts from its context: the last ``k`` bits, read as a number. Before the first bits there is no context yet, so missing bits count as zeros:
+A predictor predicts from its context: the last ``k`` bits. Before the first bits there is no context yet, so missing bits count as zeros:
 """
 
 # ╔═╡ ca52db12-954f-55d9-b71e-81a24e630d59
@@ -194,30 +197,30 @@ the start count as zeros.
 context(x, t, k) = sum(((t - j ≥ 1 ? x[t-j] : 0) << (j - 1) for j in 1:k); init = 0)
 
 # ╔═╡ 43e64bb7-9da7-4066-a124-3b999164c722
-md"Its chance of a 1 is the one its program names for that context:"
+md"Its prediction is the chance of a 1 that its program names for that context:"
 
 # ╔═╡ 300b0f43-de6d-5f1e-87c1-d45a71510915
 "`ν`'s chance that bit `t` is a 1, having seen `x[1:t-1]`."
 predict(ν, x, t) = ν.θ[context(x, t, ν.order)+1]
 
 # ╔═╡ 1b2a7cb7-6569-4093-9806-bca1e665cbb3
-md"Once the bit comes, what counts is the chance the prediction gave it:"
+md"Once the bit comes, a prediction is scored by its *likelihood*: the chance it gave that bit, ``p`` for a 1 and ``1 - p`` for a 0:"
 
 # ╔═╡ a66a76b2-9f64-4ff0-8f5c-5ccf3eba8d9c
-chance(p, bit) = bit == 1 ? p : 1 - p
+likelihood(p, bit) = bit == 1 ? p : 1 - p
 
 # ╔═╡ d1af595e-6a01-45fd-8885-1068e5a2dcd4
-md"A distribution is a code (notebook 03): a bit given the chance ``p`` costs ``-\log_2 p`` bits to send. Over a sequence, the costs add up:"
+md"A distribution is a code (notebook 03), so in bits a likelihood ``p`` becomes a cost: ``-\log_2 p`` bits to send the bit. Over a sequence, the costs add up:"
 
 # ╔═╡ 14956fcc-0dd5-5271-8230-c434cbe22bfa
 "The bits it takes to send `x[1:t]` with the predictions `ps`, for every `t`."
-cost(ps, x) = cumsum(-log2.(chance.(ps, x)))
+cost(ps, x) = cumsum(-log2.(likelihood.(ps, x)))
 
 # ╔═╡ ff744d04-317b-42ce-9217-22a05535dc7f
 md"""
-Picture a sender and a receiver who share the predictor. Before each bit, both compute the same prediction, and the sender codes the bit with it using an arithmetic coder. The receiver decodes it with the same prediction.
+Picture a sender and a receiver: the sender codes the bits with the predictor, using an arithmetic coder, and the receiver decodes them with the same predictor. What it costs depends on how well the predictor fits the bits.
 
-What it costs depends on how well the predictor fits the bits. Here are the intro's ten bits, sent with the fair coin and with the alternation predictor:
+Here are the intro's ten bits, sent with the fair coin and with the alternation predictor:
 """
 
 # ╔═╡ c10841f5-ec8d-415c-84a6-216611f5074c
@@ -235,6 +238,22 @@ md"""
 The fair coin gives every bit ½, so each costs 1 bit, 10 bits in all: it saves nothing. The alternation predictor gives each of these bits 7/8, so each costs about 0.19, 1.93 bits in all (had a bit broken the pattern, it would have cost 3).
 
 A predictor that fits the bits makes them cheap; one that doesn't makes them expensive.
+"""
+
+# ╔═╡ 70dcb2b6-b983-5952-82d1-00adc71fbb7d
+md"""
+### Sender and receiver
+
+Let's see it in action (related code is in the appendix).
+
+The sender starts with the interval ``[0, 1)`` and an empty code. Code digits name a cell the way a chance's bits do: each halves it, starting from ``[0, 1)``. For each bit, it:
+
+1. predicts the bit from the bits before it;
+2. cuts the interval at that prediction: the 0 side on the left, the 1 side on the right, each as wide as its likelihood;
+3. keeps the side of the bit;
+4. sends code digits while the interval fits inside one half of the code's cell, 0 for the left half and 1 for the right, each halving the cell. While the interval straddles the cell's middle, it sends nothing.
+
+After the last bit, it adds the fewest digits that make the code's cell fit inside the interval.
 """
 
 # ╔═╡ ab726d26-082c-4c83-b20c-063d45f438b3
@@ -268,7 +287,7 @@ Each fraction is ``\nu``'s weight after ``x`` by Bayes' rule: its prior times th
 
 # ╔═╡ db7c766c-5609-519c-818d-d51b0b8407ce
 """
-Bayes' rule: weigh each predictor by the chance its prediction `p` gave `bit`, then rescale.
+Bayes' rule: weigh each predictor by the likelihood its prediction `p` gives `bit`, then rescale.
 
     # the fair coin and alternation 3/4, after a 0
     # a 1 favours alternation
@@ -279,7 +298,7 @@ Bayes' rule: weigh each predictor by the chance its prediction `p` gave `bit`, t
     # a bit both predict alike changes nothing
     update([1//4, 3//4], [1//2, 1//2], 1) == [1//4, 3//4]
 """
-update(w, p, bit) = w .* chance.(p, bit) ./ sum(w .* chance.(p, bit))
+update(w, p, bit) = w .* likelihood.(p, bit) ./ sum(w .* likelihood.(p, bit))
 
 # ╔═╡ e4b8adb2-fc28-4390-a563-25bd3ac64fd6
 md"All predictions in one lookup table, one row per predictor and one column per context:"
@@ -565,8 +584,84 @@ This notebook stops at §2.7, Solomonoff induction: the prediction half of Legg'
 md"""
 ## Appendix: helpers
 
-Number formatting, a threaded map, and the chart style.
+The arithmetic coder from Making predictions, number formatting, a threaded map, and the chart style.
 """
+
+# ╔═╡ c1101a91-3b22-5788-a3b1-1c817c8f659e
+# The interval [0, 1), as (low, high), in exact fractions, so nothing is lost to rounding.
+WHOLE = (big(0) // 1, big(1) // 1)
+
+# ╔═╡ 491b798f-57f6-5219-a476-6c233c759cae
+"Where the prediction `p` cuts the interval: the 0 side is to its left, the 1 side to its right."
+cut((low, high), p) = low + (high - low) * (1 - Rational{BigInt}(p))
+
+# ╔═╡ 3ccd84b9-df22-566a-bbfc-a47705401a44
+"The interval after each bit of `x`, sent with `ν`: the side of that bit, where its prediction cuts."
+intervals(ν, x) = accumulate(eachindex(x); init = WHOLE) do (low, high), t
+    at = cut((low, high), predict(ν, x, t))
+    x[t] == 0 ? (low, at) : (at, high)
+end
+
+# ╔═╡ 202c4c72-88aa-584b-bc57-762289b84b83
+"The cell a run of code bits names: every number whose binary digits start with them."
+function cell(code)
+    low = isempty(code) ? big(0) // 1 : parse(BigInt, code; base = 2) // big(2)^length(code)
+    (low, low + big(1) // big(2)^length(code))
+end
+
+# ╔═╡ 4cd13998-ab74-5b2d-b10f-8d98e48becc4
+"The digits every number in the interval shares: the longest run whose cell holds all of it."
+function settled((low, high))
+    digits(m) = m == 0 ? "" : string(floor(BigInt, low * big(2)^m); base = 2, pad = m)
+    m = 0
+    while high <= last(cell(digits(m + 1)))
+        m += 1
+    end
+    digits(m)
+end
+
+# ╔═╡ 68c08ab6-3f9f-5302-86e0-9fb996cb4a5a
+"The shortest codeword that pins the interval down: `m` bits naming `j / 2^m`, with every continuation inside."
+function codeword((low, high))
+    for m in Iterators.countfrom(1)
+        j = ceil(BigInt, low * big(2)^m)
+        (j + 1) // big(2)^m <= high && return string(j; base = 2, pad = m)
+    end
+end
+
+# ╔═╡ 8abab510-3437-5815-aaa1-75362cd707fa
+"The code sent by the end of each bit of `x`: the digits its interval has settled, and after the last bit, the codeword."
+sent(ν, x) = let after = intervals(ν, x)
+    [settled.(after[1:end-1]); codeword(last(after))]
+end
+
+# ╔═╡ 3b3a36da-42e1-5233-b2a7-1d75cb8a575c
+CODES = map((
+    fair_coin = predictor(0, 0, [1/2]),
+    alternation = predictor(1, 2, [7/8, 1/8]))) do ν
+    codeword(last(intervals(ν, TEN_BITS)))
+end
+
+# ╔═╡ 71857ff0-130b-5a3d-807f-a0ed8c5694d8
+"Which side of the cut `at` a cell lies on: 0 or 1, or `nothing` while the cut still splits it."
+side((low, high), at) = low >= at ? 1 : high <= at ? 0 : nothing
+
+# ╔═╡ 4204233e-773b-51a2-a9d3-9394b4d98f97
+"""
+Read `n` bits back from `code` with `ν`. Before each bit, predict and cut, then read code bits only until the cell
+they name lies on one side of the cut: that side is the bit. Returns the bits, and the code read by each one.
+"""
+function decode(ν, code, n)
+    steps = accumulate(1:n; init = (Int[], WHOLE, "")) do (x, (low, high), read), t
+        at = cut((low, high), predict(ν, x, t))
+        while isnothing(side(cell(read), at))
+            read = code[1:length(read)+1]
+        end
+        bit = side(cell(read), at)
+        ([x; bit], bit == 0 ? (low, at) : (at, high), read)
+    end
+    (bits = first(last(steps)), read = last.(steps))
+end
 
 # ╔═╡ 704d8f96-cd78-5ddf-9a90-30cb68d4dc6a
 "`x` with `d` decimals."
@@ -574,7 +669,7 @@ fixed(x, d = 1) = Printf.format(Printf.Format("%.$(d)f"), x)
 
 # ╔═╡ 28d1adda-8b0c-43c7-a18b-a89d7cc5028d
 md"""
-No program is the start of another, so the flips spell at most one program, and the weights add up to at most 1. Over the whole language they add up to exactly 1: each unary field ends at its first 0, which comes with chance 1/2 + 1/4 + 1/8 + ⋯ = 1, so the flips always spell some program. On our list, the order's 0 must come within 3 flips, with chance 7/8, and the precision's within 4, with chance 15/16, so the weights sum to 7/8 × 15/16 = $(fixed(sum(WEIGHTS), 2)): the rest is the chance of spelling a program the language can write but the list leaves out, of order 3 and up or precision 4 and up.
+No program is the start of another, so the flips spell at most one program, and the weights add up to at most 1. Over the whole language they add up to exactly 1: each unary field ends at its first 0, which comes with chance 1/2 + 1/4 + 1/8 + ⋯ = 1. On our list, the order's 0 must come within 3 flips, with chance 7/8, and the precision's within 4, with chance 15/16, so the weights sum to 7/8 × 15/16 = $(fixed(sum(WEIGHTS), 2)): the rest is the chance of spelling a program the language can write but the list leaves out, of order 3 and up or precision 4 and up.
 
 > Legg's prior (Def. 2.5.3) is the same, with one weight per predictor: ``2^{-K}``.
 """
@@ -608,13 +703,94 @@ let rows = map(SOURCES) do (; name, μ)
     """)
 end
 
+# ╔═╡ 90501124-d3c4-5649-b5e5-0dbafbfd08e9
+"An interval `(low, high)`, as `[low, high)` to 3 decimals."
+span((low, high)) = "[$(fixed(Float64(low), 3)), $(fixed(Float64(high), 3)))"
+
+# ╔═╡ 981c8c99-4fd2-5ba3-b745-c986a106bb46
+let
+    function table(ν)
+        x = TEN_BITS
+        after = intervals(ν, x)
+        before = [WHOLE; after[1:end-1]]
+        code = sent(ν, x)
+        rows = map(eachindex(x)) do t
+            "| $t | $(fixed(predict(ν, x, t), 3)) | $(span(before[t])) | `$(x[t])` | $(span(after[t])) | $(isempty(code[t]) ? "—" : "`$(code[t])`") |"
+        end
+        """
+        | bit | chance of a 1 | interval before | coded | interval after | code so far |
+        |:-:|:-:|:--|:-:|:--|:--|
+        $(join(rows, "\n"))
+        """
+    end
+    Markdown.parse("""
+    The fair coin:
+
+    $(table(predictor(0, 0, [1/2])))
+
+    Alternation:
+
+    $(table(predictor(1, 2, [7/8, 1/8])))
+    """)
+end
+
+# ╔═╡ 37b6fd25-1dba-55a2-8d41-aa7a689e52d8
+let alternation = predictor(1, 2, [7/8, 1/8])
+    (low, high) = last(intervals(alternation, TEN_BITS))
+    md"""
+    The fair coin halves the interval at every bit, so each bit sends one digit, and the code is the ten bits themselves. Alternation keeps 7/8 of the interval at every bit, so after ten bits it is still $(fixed(Float64(high - low), 2)) wide, and it has straddled ½, the middle of ``[0, 1)``, the whole way, so it sent nothing until the end. At the end, $(Markdown.Code(CODES.alternation)) is the shortest run whose cell, $(span(cell(CODES.alternation))), fits inside. That's $(length(CODES.alternation)) bits, about a bit over the cost: the code comes in whole bits, and a whole cell must fit, but that never adds more than 2 (notebook 03).
+
+    The receiver knows the predictor and that ten bits are coming, but not the bits. It starts with ``[0, 1)`` and no code read. For each bit, it:
+
+    1. predicts the bit from the bits decoded so far;
+    2. cuts the interval at that prediction, as the sender did;
+    3. reads code digits while the cut falls inside the cell of the code read so far, since the bit could still go either way; each digit halves the cell;
+    4. decodes the bit of the side the cell lies on, and keeps that side.
+    """
+end
+
+# ╔═╡ 1f86c813-7a0d-577a-8531-4f98ea6d426d
+let
+    function table(ν, code)
+        (; bits, read) = decode(ν, code, length(TEN_BITS))
+        after = intervals(ν, bits)
+        before = [WHOLE; after[1:end-1]]
+        rows = map(eachindex(bits)) do t
+            "| $t | `$(read[t])` | $(span(cell(read[t]))) | $(fixed(predict(ν, bits, t), 3)) | $(span(before[t])) | `$(bits[t])` | $(span(after[t])) |"
+        end
+        """
+        | bit | code read | its cell | chance of a 1 | interval before | decoded | interval after |
+        |:-:|:--|:--|:-:|:--|:-:|:--|
+        $(join(rows, "\n"))
+        """
+    end
+    fair, alternation = predictor(0, 0, [1/2]), predictor(1, 2, [7/8, 1/8])
+    back = all(decode(ν, code, length(TEN_BITS)).bits == TEN_BITS
+               for (ν, code) in ((fair, CODES.fair_coin), (alternation, CODES.alternation)))
+    Markdown.parse("""
+    The fair coin, from `$(CODES.fair_coin)`:
+
+    $(table(fair, CODES.fair_coin))
+
+    Alternation, from `$(CODES.alternation)`:
+
+    $(table(alternation, CODES.alternation))
+
+    In every row, the cell of the code read sits inside the interval after: that's why the bit comes out right. The fair coin reads one code bit per bit. Alternation reads its three at bits 1, 2 and 6, and decodes the other seven from the cell it already holds. $(back ? "Both decode to" : "They don't decode to") the ten bits that were sent.
+
+    Each cut needs the bit before it: the receiver can't predict bit 2 until it has decoded bit 1. That's why the two must share the predictor, and why the bits come out in order.
+    """)
+end
+
 # ╔═╡ 08c82a03-9fa4-5b9d-a374-b5563d56bbf1
 "A whole number, with commas between the thousands."
 commas(n::Integer) = replace(string(n), r"(?<=\d)(?=(\d{3})+$)" => ",")
 
 # ╔═╡ e223181b-546d-526a-8f1d-a1f959bc3aeb
 md"""
-The list holds $(commas(length(PREDICTORS))) programs. Some describe the same predictor: the fair coin is `00`, but also `100` and `1100`, orders 1 and 2 with every chance ½. To find them, compare what programs predict in every context:
+The list holds $(commas(length(PREDICTORS))) programs.
+
+Some programs describe the same predictor: the fair coin is `00`, but also `100` and `1100`. We find those by comparing what programs predict in every context:
 """
 
 # ╔═╡ 97700adc-8d57-5055-b652-e03984aa6501
@@ -2793,6 +2969,7 @@ uuid = "23338594-aafe-5451-b93e-139f81909106"
 # ╠═6f460fc0-1c46-5991-800a-2211606e0558
 # ╟─1f353388-be7b-479f-9964-07be2100eb3a
 # ╠═c9a17ceb-a92d-51cc-b89d-506fa05fc193
+# ╟─bce49332-9e80-45bf-ab6a-fdc047cccfd8
 # ╠═0eac926e-f5ac-4854-b88d-1650031004fa
 # ╟─bfa94811-1dd0-4bdc-81e7-3d71a0433faf
 # ╟─d013c228-c565-4b44-8e2b-b62bf520e6d8
@@ -2815,6 +2992,10 @@ uuid = "23338594-aafe-5451-b93e-139f81909106"
 # ╠═c10841f5-ec8d-415c-84a6-216611f5074c
 # ╠═afdc66a8-40d9-54c1-9a04-6862b90e2f4d
 # ╟─d0c35b35-3ffa-59cd-bf7d-8c551ab00845
+# ╟─70dcb2b6-b983-5952-82d1-00adc71fbb7d
+# ╟─981c8c99-4fd2-5ba3-b745-c986a106bb46
+# ╟─37b6fd25-1dba-55a2-8d41-aa7a689e52d8
+# ╟─1f86c813-7a0d-577a-8531-4f98ea6d426d
 # ╟─ab726d26-082c-4c83-b20c-063d45f438b3
 # ╠═69c7a1fb-4ccf-5622-a0fb-fcedd41c9ab5
 # ╟─28d1adda-8b0c-43c7-a18b-a89d7cc5028d
@@ -2872,7 +3053,18 @@ uuid = "23338594-aafe-5451-b93e-139f81909106"
 # ╟─baf84fac-12da-50b2-923b-61883ba2d5e5
 # ╟─bee35bd4-698d-563c-879f-2cf80429f8e8
 # ╟─71391962-660d-5d7f-86ab-c9319fa462ad
+# ╠═c1101a91-3b22-5788-a3b1-1c817c8f659e
+# ╠═491b798f-57f6-5219-a476-6c233c759cae
+# ╠═3ccd84b9-df22-566a-bbfc-a47705401a44
+# ╠═202c4c72-88aa-584b-bc57-762289b84b83
+# ╠═4cd13998-ab74-5b2d-b10f-8d98e48becc4
+# ╠═68c08ab6-3f9f-5302-86e0-9fb996cb4a5a
+# ╠═8abab510-3437-5815-aaa1-75362cd707fa
+# ╠═3b3a36da-42e1-5233-b2a7-1d75cb8a575c
+# ╠═71857ff0-130b-5a3d-807f-a0ed8c5694d8
+# ╠═4204233e-773b-51a2-a9d3-9394b4d98f97
 # ╠═704d8f96-cd78-5ddf-9a90-30cb68d4dc6a
+# ╠═90501124-d3c4-5649-b5e5-0dbafbfd08e9
 # ╠═08c82a03-9fa4-5b9d-a374-b5563d56bbf1
 # ╠═72ed5461-7de0-5be6-9e20-b2070b71b343
 # ╠═33708e56-08e2-5be5-b599-2d26008dbf7a
