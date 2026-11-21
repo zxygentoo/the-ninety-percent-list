@@ -42,6 +42,18 @@ One list item at a time:
 - Don't lay down walls of text. Break things up, and let the prose breathe and flow.
 - Elegance comes from clarity and simplicity.
 
+### Interactive illustrations
+
+- Interactive visualization is a powerful tool for understanding abstract concepts or processes, yet Pluto is limited in interactivity, consider using embedded html/js illustration when one is warranted.
+- Build them in HTML and JavaScript, not with Pluto's `@bind`: the published pages are a static export, where `@bind` stops working but JavaScript still runs.
+- Prototype as a claude.ai artifact first.
+- Strive for simplicity and clarity when designing the illustration.
+- Avoid layout shifts: keep elements in place as the state changes, and keep the total height fixed if possible, so the cells below don't jump.
+- Make the code simple and tidy before embedding it into the notebook, avoid unnecessary dependencies.
+- For now, we embed the code directly into the notebook, in a hidden cell, and display it with an `iframe` `srcdoc`, so the notebook stays self-contained.
+- Match the notebook's fonts and colors, in light and dark mode: it should blend in, not sit in a box.
+- Hotkeys are not that useful in a notebook, so don't bother with them.
+
 ## Layout
 
 - `notebooks/NN.Title.With.Dots.jl`: the notebooks, numbered in reading order. Each is a self-contained [Pluto](https://plutojl.org) file.
