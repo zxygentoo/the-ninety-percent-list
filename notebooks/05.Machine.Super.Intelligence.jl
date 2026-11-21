@@ -240,20 +240,22 @@ The fair coin gives every bit ½, so each costs 1 bit, 10 bits in all: it saves 
 A predictor that fits the bits makes them cheap; one that doesn't makes them expensive.
 """
 
-# ╔═╡ 70dcb2b6-b983-5952-82d1-00adc71fbb7d
+# ╔═╡ 5b670148-3833-5977-afb8-ab9ef98f5512
 md"""
 ### Sender and receiver
 
-Let's see it in action (related code is in the appendix).
+Let's see it in action. The sender turns the ten bits into a short run of code digits, and the receiver, with the same predictor, turns them back. Each keeps an interval that starts at ``[0, 1)`` and narrows with every bit. A run of code digits names a *cell* the way a chance's bits do: each digit halves it, 0 for the left half and 1 for the right, starting from ``[0, 1)``.
 
-The sender starts with the interval ``[0, 1)`` and an empty code. Code digits name a cell the way a chance's bits do: each halves it, starting from ``[0, 1)``. For each bit, it:
+Step through either side, with either predictor:
+"""
 
-1. predicts the bit from the bits before it;
-2. cuts the interval at that prediction: the 0 side on the left, the 1 side on the right, each as wide as its likelihood;
-3. keeps the side of the bit;
-4. sends code digits while the interval fits inside one half of the code's cell, 0 for the left half and 1 for the right, each halving the cell. While the interval straddles the cell's middle, it sends nothing.
+# ╔═╡ 72d5dcbb-39be-55c3-be44-1fb8aaca1471
+md"""
+With alternation, the ten bits travel in three code digits, `100`. The interval straddles ½ the whole way, so the sender can't settle a single digit until the end. The receiver reads them at bits 1, 2 and 6, and decodes the other seven from the cell it already holds. The fair coin cuts in the middle every time, so it sends a digit per bit: its code is the bits themselves.
 
-After the last bit, it adds the fewest digits that make the code's cell fit inside the interval.
+Three digits is about a bit over the cost, 1.93: the code comes in whole digits, and a whole cell must fit inside the last interval, but that never adds more than 2 (notebook 03).
+
+Each cut needs the bit before it: the receiver can't predict bit 2 until it has decoded bit 1. That's why the two must share the predictor, and why the bits come out in order.
 """
 
 # ╔═╡ ab726d26-082c-4c83-b20c-063d45f438b3
@@ -584,84 +586,8 @@ This notebook stops at §2.7, Solomonoff induction: the prediction half of Legg'
 md"""
 ## Appendix: helpers
 
-The arithmetic coder from Making predictions, number formatting, a threaded map, and the chart style.
+Number formatting, a threaded map, the chart style, and, in a hidden cell, the page behind the sender-and-receiver illustration.
 """
-
-# ╔═╡ c1101a91-3b22-5788-a3b1-1c817c8f659e
-# The interval [0, 1), as (low, high), in exact fractions, so nothing is lost to rounding.
-WHOLE = (big(0) // 1, big(1) // 1)
-
-# ╔═╡ 491b798f-57f6-5219-a476-6c233c759cae
-"Where the prediction `p` cuts the interval: the 0 side is to its left, the 1 side to its right."
-cut((low, high), p) = low + (high - low) * (1 - Rational{BigInt}(p))
-
-# ╔═╡ 3ccd84b9-df22-566a-bbfc-a47705401a44
-"The interval after each bit of `x`, sent with `ν`: the side of that bit, where its prediction cuts."
-intervals(ν, x) = accumulate(eachindex(x); init = WHOLE) do (low, high), t
-    at = cut((low, high), predict(ν, x, t))
-    x[t] == 0 ? (low, at) : (at, high)
-end
-
-# ╔═╡ 202c4c72-88aa-584b-bc57-762289b84b83
-"The cell a run of code bits names: every number whose binary digits start with them."
-function cell(code)
-    low = isempty(code) ? big(0) // 1 : parse(BigInt, code; base = 2) // big(2)^length(code)
-    (low, low + big(1) // big(2)^length(code))
-end
-
-# ╔═╡ 4cd13998-ab74-5b2d-b10f-8d98e48becc4
-"The digits every number in the interval shares: the longest run whose cell holds all of it."
-function settled((low, high))
-    digits(m) = m == 0 ? "" : string(floor(BigInt, low * big(2)^m); base = 2, pad = m)
-    m = 0
-    while high <= last(cell(digits(m + 1)))
-        m += 1
-    end
-    digits(m)
-end
-
-# ╔═╡ 68c08ab6-3f9f-5302-86e0-9fb996cb4a5a
-"The shortest codeword that pins the interval down: `m` bits naming `j / 2^m`, with every continuation inside."
-function codeword((low, high))
-    for m in Iterators.countfrom(1)
-        j = ceil(BigInt, low * big(2)^m)
-        (j + 1) // big(2)^m <= high && return string(j; base = 2, pad = m)
-    end
-end
-
-# ╔═╡ 8abab510-3437-5815-aaa1-75362cd707fa
-"The code sent by the end of each bit of `x`: the digits its interval has settled, and after the last bit, the codeword."
-sent(ν, x) = let after = intervals(ν, x)
-    [settled.(after[1:end-1]); codeword(last(after))]
-end
-
-# ╔═╡ 3b3a36da-42e1-5233-b2a7-1d75cb8a575c
-CODES = map((
-    fair_coin = predictor(0, 0, [1/2]),
-    alternation = predictor(1, 2, [7/8, 1/8]))) do ν
-    codeword(last(intervals(ν, TEN_BITS)))
-end
-
-# ╔═╡ 71857ff0-130b-5a3d-807f-a0ed8c5694d8
-"Which side of the cut `at` a cell lies on: 0 or 1, or `nothing` while the cut still splits it."
-side((low, high), at) = low >= at ? 1 : high <= at ? 0 : nothing
-
-# ╔═╡ 4204233e-773b-51a2-a9d3-9394b4d98f97
-"""
-Read `n` bits back from `code` with `ν`. Before each bit, predict and cut, then read code bits only until the cell
-they name lies on one side of the cut: that side is the bit. Returns the bits, and the code read by each one.
-"""
-function decode(ν, code, n)
-    steps = accumulate(1:n; init = (Int[], WHOLE, "")) do (x, (low, high), read), t
-        at = cut((low, high), predict(ν, x, t))
-        while isnothing(side(cell(read), at))
-            read = code[1:length(read)+1]
-        end
-        bit = side(cell(read), at)
-        ([x; bit], bit == 0 ? (low, at) : (at, high), read)
-    end
-    (bits = first(last(steps)), read = last.(steps))
-end
 
 # ╔═╡ 704d8f96-cd78-5ddf-9a90-30cb68d4dc6a
 "`x` with `d` decimals."
@@ -700,85 +626,6 @@ let rows = map(SOURCES) do (; name, μ)
     $(join(rows, "\n"))
 
     Most sources have one program that dominates, so their price is about its length.
-    """)
-end
-
-# ╔═╡ 90501124-d3c4-5649-b5e5-0dbafbfd08e9
-"An interval `(low, high)`, as `[low, high)` to 3 decimals."
-span((low, high)) = "[$(fixed(Float64(low), 3)), $(fixed(Float64(high), 3)))"
-
-# ╔═╡ 981c8c99-4fd2-5ba3-b745-c986a106bb46
-let
-    function table(ν)
-        x = TEN_BITS
-        after = intervals(ν, x)
-        before = [WHOLE; after[1:end-1]]
-        code = sent(ν, x)
-        rows = map(eachindex(x)) do t
-            "| $t | $(fixed(predict(ν, x, t), 3)) | $(span(before[t])) | `$(x[t])` | $(span(after[t])) | $(isempty(code[t]) ? "—" : "`$(code[t])`") |"
-        end
-        """
-        | bit | chance of a 1 | interval before | coded | interval after | code so far |
-        |:-:|:-:|:--|:-:|:--|:--|
-        $(join(rows, "\n"))
-        """
-    end
-    Markdown.parse("""
-    The fair coin:
-
-    $(table(predictor(0, 0, [1/2])))
-
-    Alternation:
-
-    $(table(predictor(1, 2, [7/8, 1/8])))
-    """)
-end
-
-# ╔═╡ 37b6fd25-1dba-55a2-8d41-aa7a689e52d8
-let alternation = predictor(1, 2, [7/8, 1/8])
-    (low, high) = last(intervals(alternation, TEN_BITS))
-    md"""
-    The fair coin halves the interval at every bit, so each bit sends one digit, and the code is the ten bits themselves. Alternation keeps 7/8 of the interval at every bit, so after ten bits it is still $(fixed(Float64(high - low), 2)) wide, and it has straddled ½, the middle of ``[0, 1)``, the whole way, so it sent nothing until the end. At the end, $(Markdown.Code(CODES.alternation)) is the shortest run whose cell, $(span(cell(CODES.alternation))), fits inside. That's $(length(CODES.alternation)) bits, about a bit over the cost: the code comes in whole bits, and a whole cell must fit, but that never adds more than 2 (notebook 03).
-
-    The receiver knows the predictor and that ten bits are coming, but not the bits. It starts with ``[0, 1)`` and no code read. For each bit, it:
-
-    1. predicts the bit from the bits decoded so far;
-    2. cuts the interval at that prediction, as the sender did;
-    3. reads code digits while the cut falls inside the cell of the code read so far, since the bit could still go either way; each digit halves the cell;
-    4. decodes the bit of the side the cell lies on, and keeps that side.
-    """
-end
-
-# ╔═╡ 1f86c813-7a0d-577a-8531-4f98ea6d426d
-let
-    function table(ν, code)
-        (; bits, read) = decode(ν, code, length(TEN_BITS))
-        after = intervals(ν, bits)
-        before = [WHOLE; after[1:end-1]]
-        rows = map(eachindex(bits)) do t
-            "| $t | `$(read[t])` | $(span(cell(read[t]))) | $(fixed(predict(ν, bits, t), 3)) | $(span(before[t])) | `$(bits[t])` | $(span(after[t])) |"
-        end
-        """
-        | bit | code read | its cell | chance of a 1 | interval before | decoded | interval after |
-        |:-:|:--|:--|:-:|:--|:-:|:--|
-        $(join(rows, "\n"))
-        """
-    end
-    fair, alternation = predictor(0, 0, [1/2]), predictor(1, 2, [7/8, 1/8])
-    back = all(decode(ν, code, length(TEN_BITS)).bits == TEN_BITS
-               for (ν, code) in ((fair, CODES.fair_coin), (alternation, CODES.alternation)))
-    Markdown.parse("""
-    The fair coin, from `$(CODES.fair_coin)`:
-
-    $(table(fair, CODES.fair_coin))
-
-    Alternation, from `$(CODES.alternation)`:
-
-    $(table(alternation, CODES.alternation))
-
-    In every row, the cell of the code read sits inside the interval after: that's why the bit comes out right. The fair coin reads one code bit per bit. Alternation reads its three at bits 1, 2 and 6, and decodes the other seven from the cell it already holds. $(back ? "Both decode to" : "They don't decode to") the ten bits that were sent.
-
-    Each cut needs the bit before it: the receiver can't predict bit 2 until it has decoded bit 1. That's why the two must share the predictor, and why the bits come out in order.
     """)
 end
 
@@ -985,6 +832,832 @@ let ns = round.(Int, exp10.(1:0.1:6))
         Legend(fig[2, 1], ax; orientation = :horizontal)
         fig
     end
+end
+
+# ╔═╡ 3a483061-3cce-5074-997b-7671e8348e88
+SENDER_RECEIVER = raw"""
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sender and Receiver</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+  /* Layout: the side switch and the predictor; the animation at full width (an overview of [0, 1), zoom lines,
+     the number line with the interval above the axis and the code's cell below it) and its legend; the transport,
+     centered, where the narration's length can't move it; then the two bit streams on one line, the cost so far,
+     and what is happening now. No boxes: it sits on the page like a figure.
+     Light and dark follow the viewer's setting, as Pluto does, on Pluto's own backgrounds. */
+  :root {
+    --bg: #ffffff;
+    --fg: #1f1f1f;
+    --muted: #6b6b6b;
+    --line: #d9d9d9;
+    --control: #f3f3f3;
+    --chip: #efefef;
+    --zero: #2a78d6;
+    --one: #c27c00;
+    --cell: #138a5f;
+    --alert: #e5484d;
+    --font-math: "STIX Two Text", "Cambria Math", Georgia, serif;
+    --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1f1f1f; --fg: #e4e4e4; --muted: #9b9b9b; --line: #3d3d3d; --control: #2a2a2a; --chip: #2e2e2e;
+      --zero: #58c4dd; --one: #f4c95d; --cell: #83c167; --alert: #fc6255;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1f1f1f; --fg: #e4e4e4; --muted: #9b9b9b; --line: #3d3d3d; --control: #2a2a2a; --chip: #2e2e2e;
+    --zero: #58c4dd; --one: #f4c95d; --cell: #83c167; --alert: #fc6255;
+    color-scheme: dark;
+  }
+  html { background: var(--bg); }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.55;
+    margin: 0;
+    padding-inline: 0;
+    padding-block: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin-inline: auto; padding-block: 12px 16px; display: grid; gap: 14px; }
+
+  .label { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 24px; }
+  .group { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+  .seg { display: inline-flex; gap: 3px; padding: 3px; border: 1px solid var(--line); border-radius: 9px; background: var(--control); }
+  .seg button {
+    font: inherit; font-size: 14px; font-weight: 500; color: var(--muted);
+    background: transparent; border: 0; border-radius: 6px; padding: 6px 14px; cursor: pointer;
+  }
+  .seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+  select {
+    font: inherit; font-size: 14px; color: var(--fg); background: var(--control);
+    border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; cursor: pointer;
+  }
+
+  .stage { display: grid; gap: 6px; }
+  #stage { display: block; width: 100%; height: 248px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; color: var(--muted); }
+  .key { display: inline-flex; align-items: center; gap: 7px; }
+  .swatch { width: 11px; height: 11px; border-radius: 2px; }
+  .swatch.zero { background: var(--zero); }
+  .swatch.one { background: var(--one); }
+  .swatch.cell { background: var(--cell); }
+  .swatch.mid { width: 2px; height: 13px; border-radius: 0; background: var(--alert); }
+
+  .readout { display: grid; gap: 10px; position: relative; }
+  .measure { position: absolute; inset: 0 0 auto 0; visibility: hidden; pointer-events: none; }
+  .tapes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+  .tape { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+  .flow { color: var(--muted); font-size: 17px; line-height: 1; }
+  .tape .label { font-size: 13px; }
+  .tape-cells { display: flex; flex-wrap: wrap; gap: 4px; min-height: 32px; align-items: center; }
+  .bitbox {
+    box-sizing: border-box; width: 28px; height: 32px; display: grid; place-items: center; border-radius: 6px;
+    border: 1px solid var(--line); font-family: var(--font-mono); font-size: 16px; font-weight: 600;
+  }
+  .bitbox.b0 { color: var(--zero); }
+  .bitbox.b1 { color: var(--one); }
+  .bitbox.future { color: var(--muted); opacity: .45; }
+  .bitbox.unread { opacity: .38; }
+  .bitbox.current { border-color: var(--fg); box-shadow: inset 0 0 0 1px var(--fg); }
+  .bitbox.flushed { border-style: dashed; border-color: var(--cell); }
+  .bitbox.new { animation: pop .45s ease-out; }
+  .none { font-size: 13px; color: var(--muted); }
+  .narration { margin: 0; font-family: var(--font-math); font-size: 19px; line-height: 1.5; }
+  .narration b { font-weight: 600; }
+  .narration.fresh { animation: fade .35s ease-out; }
+  .iv, .narration code {
+    font-family: var(--font-mono); font-size: .8em; white-space: nowrap;
+    background: var(--chip); border-radius: 4px; padding: 1px 5px;
+  }
+  .tally { margin: 0; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  @keyframes pop { from { transform: translateY(-7px) scale(1.25); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes fade { from { opacity: .25; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+
+  .transport { display: flex; justify-content: center; gap: 8px; }
+  .icon-btn {
+    width: 40px; height: 40px; display: inline-grid; place-items: center; padding: 0; cursor: pointer;
+    border-radius: 9px; border: 1px solid var(--line); background: var(--control); color: var(--fg);
+  }
+  .icon-btn svg { width: 16px; height: 16px; }
+  .icon-btn.primary { width: 48px; background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  .icon-btn:disabled { opacity: .35; cursor: default; }
+
+  :focus-visible { outline: 2px solid var(--zero); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<main class="wrap">
+  <section class="controls" aria-label="Setup">
+    <div class="seg" role="group" aria-label="Side">
+      <button type="button" id="mode-sender" aria-pressed="true">Sender</button>
+      <button type="button" id="mode-receiver" aria-pressed="false">Receiver</button>
+    </div>
+    <div class="group">
+      <label class="label" for="predictor">Predictor</label>
+      <select id="predictor">
+        <option value="alternation">Alternation, 7/8</option>
+        <option value="fair">Fair coin</option>
+      </select>
+    </div>
+  </section>
+
+  <section class="stage" aria-label="The coder at work">
+    <canvas id="stage" role="img" aria-label="The interval and the code's cell on the number line"></canvas>
+    <div class="legend">
+      <span class="key"><span class="swatch zero" aria-hidden="true"></span>0 side, 0 half</span>
+      <span class="key"><span class="swatch one" aria-hidden="true"></span>1 side, 1 half</span>
+      <span class="key"><span class="swatch cell" aria-hidden="true"></span>code's cell</span>
+      <span class="key"><span class="swatch mid" aria-hidden="true"></span>cell's middle, when the interval straddles it</span>
+    </div>
+  </section>
+
+  <nav class="transport" aria-label="Steps">
+    <button type="button" class="icon-btn" id="first" aria-label="First step">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3v10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M13 3.2 6 8l7 4.8z" fill="currentColor"/></svg>
+    </button>
+    <button type="button" class="icon-btn" id="prev" aria-label="Previous step">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.5 3.2 4.5 8l7 4.8z" fill="currentColor"/></svg>
+    </button>
+    <button type="button" class="icon-btn primary" id="play" aria-label="Play">
+      <svg viewBox="0 0 16 16" aria-hidden="true" id="play-icon"><path d="M4.5 2.8 13.5 8l-9 5.2z" fill="currentColor"/></svg>
+    </button>
+    <button type="button" class="icon-btn" id="next" aria-label="Next step">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 3.2 11.5 8l-7 4.8z" fill="currentColor"/></svg>
+    </button>
+    <button type="button" class="icon-btn" id="last" aria-label="Last step">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12.5 3v10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M3 3.2 10 8l-7 4.8z" fill="currentColor"/></svg>
+    </button>
+  </nav>
+
+  <section class="readout" aria-label="What is happening now">
+    <div class="tapes" id="tapes"></div>
+    <p class="tally" id="tally"></p>
+    <p class="narration" id="narration" aria-live="polite"></p>
+    <div class="measure" aria-hidden="true"><div class="tapes"></div><p class="narration"></p></div>
+  </section>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---- The coder: pure functions --------------------------------------------------------------
+
+  const PREDICTORS = {
+    alternation: { order: 1, theta: [7 / 8, 1 / 8] },
+    fair: { order: 0, theta: [1 / 2] },
+  };
+  const TEN_BITS = [1, 0, 1, 0, 1, 0, 1, 0, 1, 0];
+  const FRACTIONS = new Map([[0.5, "1/2"], [0.875, "7/8"], [0.125, "1/8"]]);
+  const frac = p => FRACTIONS.get(p) ?? p.toFixed(3);
+
+  // The chance that bit t is a 1, from the bits before it; a missing bit counts as a 0.
+  function predict(pred, bits, t) {
+    if (pred.order === 0) return pred.theta[0];
+    return pred.theta[t === 0 ? 0 : bits[t - 1]];
+  }
+
+  // The cell a run of code digits names: each digit halves it, 0 left and 1 right.
+  function cellOf(code) {
+    let a = 0, w = 1;
+    for (const c of code) { w /= 2; if (c === "1") a += w; }
+    return [a, a + w];
+  }
+
+  // The shortest run of digits whose cell fits inside [low, high).
+  function codeword(low, high) {
+    for (let m = 1; m <= 52; m++) {
+      const scale = 2 ** m, j = Math.ceil(low * scale);
+      if ((j + 1) / scale <= high) return j.toString(2).padStart(m, "0");
+    }
+    return "";
+  }
+
+  function buildSender(pred, message) {
+    const frames = [], n = message.length;
+    let low = 0, high = 1, code = "", flushFrom = null;
+    const snap = extra => frames.push({
+      mode: "sender", pred, n, message, low, high, code, cell: cellOf(code), flushFrom, ...extra,
+    });
+    snap({ phase: "start", t: -1 });
+    for (let t = 0; t < n; t++) {
+      const p = predict(pred, message, t);
+      snap({ phase: "predict", t, p });
+      const cut = low + (high - low) * (1 - p);
+      snap({ phase: "cut", t, p, cut });
+      const bit = message[t], before = [low, high];
+      if (bit) low = cut; else high = cut;
+      snap({ phase: "keep", t, p, cut, bit, before, lik: bit ? p : 1 - p });
+      let sent = 0;
+      for (;;) {
+        const prevCell = cellOf(code), mid = (prevCell[0] + prevCell[1]) / 2;
+        const digit = high <= mid ? "0" : low >= mid ? "1" : null;
+        if (!digit) break;
+        code += digit;
+        sent++;
+        snap({ phase: "send", t, digit, prevCell });
+      }
+      if (!sent) snap({ phase: "wait", t });
+    }
+    const target = codeword(low, high);
+    flushFrom = code.length;
+    if (code.length >= target.length) snap({ phase: "flushnone", t: n });
+    while (code.length < target.length) {
+      const prevCell = cellOf(code);
+      code += target[code.length];
+      snap({ phase: "flush", t: n, digit: code.at(-1), prevCell, fits: code.length === target.length });
+    }
+    snap({ phase: "done", t: n });
+    return frames;
+  }
+
+  function buildReceiver(pred, code, n) {
+    const frames = [], bits = [];
+    let low = 0, high = 1, read = "";
+    const snap = extra => frames.push({
+      mode: "receiver", pred, n, code, low, high, read, cell: cellOf(read), bits: bits.slice(), ...extra,
+    });
+    snap({ phase: "start", t: -1 });
+    for (let t = 0; t < n; t++) {
+      const p = predict(pred, bits, t);
+      snap({ phase: "predict", t, p });
+      const cut = low + (high - low) * (1 - p);
+      snap({ phase: "cut", t, p, cut });
+      let readAny = false;
+      for (;;) {
+        const prevCell = cellOf(read);
+        if (prevCell[0] >= cut || prevCell[1] <= cut || read.length >= code.length) break;
+        read += code[read.length];
+        readAny = true;
+        snap({ phase: "read", t, p, cut, digit: read.at(-1), prevCell });
+      }
+      const bit = cellOf(read)[0] >= cut ? 1 : 0;
+      if (!readAny) snap({ phase: "noread", t, p, cut, side: bit });
+      const before = [low, high];
+      if (bit) low = cut; else high = cut;
+      bits.push(bit);
+      snap({ phase: "decode", t, p, cut, bit, before });
+    }
+    snap({ phase: "done", t: n });
+    return frames;
+  }
+
+  // ---- Words ----------------------------------------------------------------------------------
+
+  const decimalsFor = w => Math.min(10, Math.max(3, Math.ceil(-Math.log10(w)) + 1));
+  const num = (x, d) => x.toFixed(d);
+  const spanText = ([a, b], d) => `[${num(a, d)}, ${num(b, d)})`;
+
+  function widthsOf(f) {
+    const ws = [f.high - f.low, f.cell[1] - f.cell[0]];
+    if (f.prevCell) ws.push(f.prevCell[1] - f.prevCell[0]);
+    if (f.before) ws.push(f.before[1] - f.before[0]);
+    return Math.min(...ws);
+  }
+
+  function reason(pred, bits, t, decoded) {
+    if (pred.order === 0) return "The fair coin gives every bit the same chance";
+    if (t === 0) return "No bit yet, so the missing bit counts as a 0, and alternation expects a 1";
+    const prev = bits[t - 1];
+    return `The last bit${decoded ? " decoded" : ""} was ${prev}, so alternation expects a ${1 - prev}`;
+  }
+
+  function narrate(f) {
+    const pred = f.pred;
+    const d = decimalsFor(widthsOf(f));
+    const I = (a, b) => `<span class="iv">${spanText([a, b], d)}</span>`;
+    const C = s => `<code>${s}</code>`;
+    const B = s => `<b>${s}</b>`;
+    const plural = (k, word) => `${k} ${word}${k === 1 ? "" : "s"}`;
+    if (f.mode === "sender") {
+      switch (f.phase) {
+        case "start":
+          return `The sender starts with the interval ${I(0, 1)} and an empty code, whose cell is ${I(0, 1)} too. For each of its ${plural(f.n, "bit")}, ${C(f.message.join(""))}, it predicts the bit, cuts the interval, keeps the bit’s side, and sends any code digits that are settled.`;
+        case "predict":
+          return `${B(`Bit ${f.t + 1}`)}. ${reason(pred, f.message, f.t, false)}: the chance of a 1 is ${B(frac(f.p))}.`;
+        case "cut":
+          return `Cut the interval at ${B(num(f.cut, d))}, so each side gets the chance of its bit: the 0 side, ${I(f.low, f.cut)}, gets ${frac(1 - f.p)}, and the 1 side, ${I(f.cut, f.high)}, gets ${frac(f.p)}.`;
+        case "keep": {
+          const cost = -Math.log2(f.lik);
+          return `The bit is ${B(f.bit)}: keep its side, ${I(f.low, f.high)}. Its likelihood was ${frac(f.lik)}, a cost of ${cost.toFixed(2)} bits${f.lik < 0.5 ? ": a surprise" : ""}.`;
+        }
+        case "send":
+          return `Every number left in the interval ${I(f.low, f.high)} now shares the next digit: the interval fits inside the ${f.digit === "0" ? "left" : "right"} half of the code’s cell ${I(...f.prevCell)}. Send ${B(f.digit)}; the cell halves to ${I(...f.cell)}.`;
+        case "wait": {
+          const mid = (f.cell[0] + f.cell[1]) / 2;
+          return `The interval ${I(f.low, f.high)} straddles the middle of the code’s cell, ${B(num(mid, d))}: some of its numbers continue with a 0, others with a 1. No digit is settled, so nothing is sent.`;
+        }
+        case "flush":
+          return `No bits left. To finish, add digits until the code’s cell fits inside the interval ${I(f.low, f.high)}, so every number in the cell decodes the same way. Add ${B(f.digit)}: the cell ${I(...f.cell)} ${f.fits ? "fits." : "still sticks out."}`;
+        case "flushnone":
+          return `No bits left, and the code’s cell ${I(...f.cell)} already fits inside the interval ${I(f.low, f.high)}: nothing to add.`;
+        case "done": {
+          const cost = -Math.log2(f.high - f.low);
+          return `The code is ${C(f.code)}: ${plural(f.code.length, "digit")} for ${plural(f.n, "bit")}. The interval ended ${num(f.high - f.low, d)} wide, a cost of ${cost.toFixed(2)} bits; whole digits, and a whole cell inside the interval, add at most 2.`;
+        }
+      }
+    } else {
+      switch (f.phase) {
+        case "start":
+          return `The receiver gets the code ${C(f.code)} and knows ${plural(f.n, "bit")} are coming, but not the bits. It starts from ${I(0, 1)} with no code read, so its cell is ${I(0, 1)}. For each bit, it predicts, cuts the interval as the sender did, reads only as much code as it needs, and decodes.`;
+        case "predict":
+          return `${B(`Bit ${f.t + 1}`)}. ${reason(pred, f.bits, f.t, true)}: the chance of a 1 is ${B(frac(f.p))}.`;
+        case "cut":
+          return `Cut the interval at ${B(num(f.cut, d))}, exactly as the sender did: the 0 side is ${I(f.low, f.cut)}, the 1 side ${I(f.cut, f.high)}.`;
+        case "read":
+          return `The cut ${num(f.cut, d)} falls inside the cell of the code read so far, ${I(...f.prevCell)}, so the bit could still go either way. Read the next digit, ${B(f.digit)}: the cell halves to ${I(...f.cell)}.`;
+        case "noread":
+          return `The cell of the code read so far, ${I(...f.cell)}, already lies on the ${f.side} side of the cut ${num(f.cut, d)}. The bit is decided without reading more.`;
+        case "decode":
+          return `The cell lies on the ${f.bit} side, so the bit is ${B(f.bit)}. Keep that side, ${I(f.low, f.high)}.`;
+        case "done": {
+          const match = f.bits.join("") === TEN_BITS.join("");
+          return `All ${plural(f.n, "bit")} decoded, ${C(f.bits.join(""))}, from ${plural(f.code.length, "code digit")}. ${match ? "They match the message." : "They don’t match the message."}`;
+        }
+      }
+    }
+    return "";
+  }
+
+  // ---- The stage: scenes, tweening, drawing ---------------------------------------------------
+
+  const css = getComputedStyle(document.documentElement);
+  const token = name => css.getPropertyValue(`--${name}`).trim();
+  let COLOR = {};
+  const readColors = () => { COLOR = Object.fromEntries(["fg", "muted", "zero", "one", "cell", "alert"].map(k => [k, token(k)])); };
+  readColors();
+  const FONT = {
+    band: `italic 15px ${token("font-math")}`,
+    small: `500 11.5px ${token("font-ui")}`,
+    tick: `11px ${token("font-mono")}`,
+    title: `12px ${token("font-mono")}`,
+  };
+  const G = { H: 248, OV: 24, ZOOM_TO: 62, IV_TOP: 92, IV_BOT: 128, AXIS: 154, CELL_TOP: 192, CELL_BOT: 228 };
+  G.IV_MID = (G.IV_TOP + G.IV_BOT) / 2;
+  G.CELL_MID = (G.CELL_TOP + G.CELL_BOT) / 2;
+
+  function rgba(hex, a) {
+    const n = parseInt(hex.replace("#", ""), 16);
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${Math.max(0, Math.min(1, a))})`;
+  }
+
+  function viewFor(f) {
+    const spans = [[f.low, f.high], f.cell];
+    if (f.prevCell) spans.push(f.prevCell);
+    if (f.before) spans.push(f.before);
+    let lo = Math.min(...spans.map(s => s[0])), hi = Math.max(...spans.map(s => s[1]));
+    const focus = f.before ?? [f.low, f.high];
+    const w = focus[1] - focus[0];
+    if (hi - lo > w / 0.3) {
+      const c = (focus[0] + focus[1]) / 2;
+      lo = c - w / 0.6;
+      hi = c + w / 0.6;
+    }
+    const pad = (hi - lo) * 0.07;
+    return [lo - pad, hi + pad];
+  }
+
+  function sceneOf(f) {
+    const s = { rects: [], lines: [], labels: [] };
+    const R = (id, x0, x1, y0, y1, color, fill, stroke = 0) =>
+      s.rects.push({ id, x0, x1, y0, y1, color, fill, stroke, alpha: 1 });
+    const L = (id, x, y0, y1, color, dash, width) =>
+      s.lines.push({ id, x, y0, y1, color, dash, width, alpha: 1 });
+    const T = (id, x, y, text, color, opt = {}) =>
+      s.labels.push({ id, x, y, text, color, alpha: 1, font: opt.font ?? "band", align: opt.align ?? "center",
+                      dx: opt.dx ?? 0, w0: opt.within?.[0], w1: opt.within?.[1] });
+
+    const receiver = f.mode === "receiver";
+    const { low, high } = f;
+    const [ca, cb] = f.cell;
+    const d = decimalsFor(widthsOf(f));
+    const sides = f.phase === "cut" || f.phase === "read" || f.phase === "noread";
+    const kept = f.phase === "keep" || f.phase === "decode";
+
+    // The interval, above the axis.
+    R("iv", low, high, G.IV_TOP, G.IV_BOT, COLOR.fg, 0.07, 0.75);
+    if (sides) {
+      R("side0", low, f.cut, G.IV_TOP, G.IV_BOT, COLOR.zero, 0.32);
+      R("side1", f.cut, high, G.IV_TOP, G.IV_BOT, COLOR.one, 0.32);
+      T("t-side0", (low + f.cut) / 2, G.IV_MID, "0 side", COLOR.zero, { within: [low, f.cut] });
+      T("t-side1", (f.cut + high) / 2, G.IV_MID, "1 side", COLOR.one, { within: [f.cut, high] });
+      L("cut", f.cut, G.IV_TOP - 8, receiver ? G.CELL_BOT + 6 : G.IV_BOT + 8, COLOR.fg, false, 2);
+      T("t-cut", f.cut, G.IV_BOT + 14, `cut ${num(f.cut, d)}`, COLOR.fg, { font: "small", align: "left", dx: 6 });
+    }
+    if (kept) {
+      const color = f.bit ? COLOR.one : COLOR.zero;
+      R(`side${f.bit}`, low, high, G.IV_TOP, G.IV_BOT, color, 0.32);
+      T(`t-side${f.bit}`, (low + high) / 2, G.IV_MID, receiver ? `decoded ${f.bit}` : `${f.bit} side kept`, color,
+        { within: [low, high] });
+    }
+    if (f.phase === "predict") {
+      T("t-pred", (low + high) / 2, G.IV_MID, `chance of a 1: ${frac(f.p)}`, COLOR.fg, { within: [low, high] });
+    }
+
+    // The code's cell, below the axis.
+    const halves = f.phase === "wait" ? f.cell : ["send", "flush", "read"].includes(f.phase) ? f.prevCell : null;
+    if (halves) {
+      const [ha, hb] = halves, mid = (ha + hb) / 2, strong = f.phase === "wait";
+      R("half0", ha, mid, G.CELL_TOP, G.CELL_BOT, COLOR.zero, strong ? 0.18 : 0.08, 0.4);
+      R("half1", mid, hb, G.CELL_TOP, G.CELL_BOT, COLOR.one, strong ? 0.18 : 0.08, 0.4);
+      if (strong) {
+        T("t-half0", (ha + mid) / 2, G.CELL_MID, "0 half", COLOR.zero, { within: [ha, mid] });
+        T("t-half1", (mid + hb) / 2, G.CELL_MID, "1 half", COLOR.one, { within: [mid, hb] });
+      }
+      if (!receiver) {
+        L("mid", mid, G.IV_TOP - 8, G.CELL_BOT + 6, strong ? COLOR.alert : COLOR.muted, true, strong ? 2 : 1.25);
+        if (strong) T("t-mid", mid, G.CELL_BOT + 13, "middle", COLOR.alert, { font: "small" });
+      }
+    }
+    const code = receiver ? f.read : f.code;
+    R("cell", ca, cb, G.CELL_TOP, G.CELL_BOT, COLOR.cell, f.phase === "wait" ? 0 : 0.28, 0.9);
+    if (f.phase !== "wait") {
+      const word = { send: `sent ${f.digit}`, flush: `added ${f.digit}`, read: `read ${f.digit}` }[f.phase]
+        ?? (code || (receiver ? "nothing read" : "empty code"));
+      T("t-cell", (ca + cb) / 2, G.CELL_MID, word, COLOR.cell, { within: [ca, cb] });
+    }
+
+    s.title = `interval ${spanText([low, high], d)}`;
+    s.view = viewFor(f);
+    return s;
+  }
+
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const ease = t => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+
+  function mix(a, b, t) {
+    const o = { ...b };
+    for (const k of Object.keys(b)) {
+      if (typeof b[k] === "number" && typeof a[k] === "number") o[k] = lerp(a[k], b[k], t);
+    }
+    if (a.text !== undefined && a.text !== b.text && t < 0.5) o.text = a.text;
+    return o;
+  }
+
+  // Zoom about the point the two views share, so the zoom feels like one smooth camera move.
+  function tweenView(A, B, t) {
+    const sa = A[1] - A[0], sb = B[1] - B[0];
+    if (Math.abs(Math.log(sb / sa)) < 1e-3) return [lerp(A[0], B[0], t), lerp(A[1], B[1], t)];
+    const z = (B[0] * sa - A[0] * sb) / (sa - sb), r = (z - A[0]) / sa, s = sa * (sb / sa) ** t;
+    return [z - r * s, z - r * s + s];
+  }
+
+  function tweenScenes(A, B, t) {
+    const out = { view: tweenView(A.view, B.view, t), title: B.title, rects: [], lines: [], labels: [] };
+    for (const kind of ["rects", "lines", "labels"]) {
+      const am = new Map(A[kind].map(o => [o.id, o])), bm = new Map(B[kind].map(o => [o.id, o]));
+      for (const id of new Set([...am.keys(), ...bm.keys()])) {
+        const a = am.get(id), b = bm.get(id);
+        if (a && b) out[kind].push(mix(a, b, t));
+        else if (a) out[kind].push({ ...a, alpha: a.alpha * (1 - t) });
+        else out[kind].push({ ...b, alpha: b.alpha * t });
+      }
+    }
+    return out;
+  }
+
+  const canvas = document.getElementById("stage");
+  const ctx = canvas.getContext("2d");
+  let W = 0, DPR = 1;
+
+  function chooseK(span, P) {
+    for (let k = Math.max(0, Math.ceil(Math.log2(12 / span))); k > 0; k--) {
+      const gap = 2 ** -k / span * P, need = Math.max(58, (k + 4) * 7 + 14);
+      if (gap >= need) return k;
+    }
+    return 0;
+  }
+
+  function binaryLabel(j, k) {
+    if (j === 0) return "0";
+    if (j === 2 ** k) return "1";
+    return `0.${j.toString(2).padStart(k, "0").replace(/0+$/, "")}₂`;
+  }
+
+  function draw(sc) {
+    if (!sc || !W) return;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.clearRect(0, 0, W, G.H);
+    const M = W < 480 ? 12 : 18, P = W - 2 * M;
+    const [v0, v1] = sc.view;
+    const clampPx = x => Math.max(-4000, Math.min(W + 4000, x));
+    const X = v => clampPx(M + (v - v0) / (v1 - v0) * P);
+    const OX = v => M + Math.max(0, Math.min(1, v)) * P;
+
+    const line = (x0, y0, x1, y1) => { ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); };
+    const text = (s, x, y, color, font, align = "center") => {
+      ctx.font = FONT[font]; ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = "middle"; ctx.fillText(s, x, y);
+    };
+
+    // Overview of [0, 1): where the interval, the cell and the zoom window are.
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = rgba(COLOR.muted, 0.55);
+    line(OX(0), G.OV, OX(1), G.OV);
+    text("0", OX(0), G.OV + 15, COLOR.muted, "small", "left");
+    text("1", OX(1), G.OV + 15, COLOR.muted, "small", "right");
+    const iv = sc.rects.find(r => r.id === "iv"), cell = sc.rects.find(r => r.id === "cell");
+    if (iv) {
+      ctx.fillStyle = rgba(COLOR.fg, 0.85 * iv.alpha);
+      ctx.fillRect(OX(iv.x0), G.OV - 6, Math.max(1.5, OX(iv.x1) - OX(iv.x0)), 4);
+    }
+    if (cell) {
+      ctx.fillStyle = rgba(COLOR.cell, 0.9 * cell.alpha);
+      ctx.fillRect(OX(cell.x0), G.OV + 2, Math.max(1.5, OX(cell.x1) - OX(cell.x0)), 4);
+    }
+    let w0 = OX(v0), w1 = OX(v1);
+    if (w1 - w0 < 3) { const c = (w0 + w1) / 2; w0 = c - 1.5; w1 = c + 1.5; }
+    ctx.strokeStyle = rgba(COLOR.fg, 0.9);
+    ctx.lineWidth = 1.25;
+    ctx.strokeRect(w0, G.OV - 9, w1 - w0, 18);
+    ctx.strokeStyle = rgba(COLOR.muted, 0.35);
+    ctx.lineWidth = 1;
+    line(w0, G.OV + 9, M, G.ZOOM_TO);
+    line(w1, G.OV + 9, W - M, G.ZOOM_TO);
+
+    // The zoomed number line.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(M, G.ZOOM_TO, P, G.H - G.ZOOM_TO);
+    ctx.clip();
+
+    const a0 = Math.max(v0, 0), a1 = Math.min(v1, 1);
+    ctx.strokeStyle = rgba(COLOR.fg, 0.55);
+    ctx.lineWidth = 1.25;
+    line(X(a0), G.AXIS, X(a1), G.AXIS);
+    const k = chooseK(v1 - v0, P), step = 2 ** -k, minor = step / 2;
+    ctx.strokeStyle = rgba(COLOR.fg, 0.22);
+    for (let j = Math.ceil(a0 / minor); j * minor <= a1; j++) line(X(j * minor), G.AXIS - 3, X(j * minor), G.AXIS + 3);
+    ctx.strokeStyle = rgba(COLOR.fg, 0.6);
+    for (let j = Math.ceil(a0 / step); j * step <= a1; j++) {
+      const x = X(j * step);
+      line(x, G.AXIS - 6, x, G.AXIS + 6);
+      text(binaryLabel(j, k), x, G.AXIS + 17, COLOR.muted, "tick");
+    }
+
+    for (const r of sc.rects) {
+      if (r.alpha <= 0.005) continue;
+      const x0 = X(r.x0), x1 = X(r.x1), w = Math.max(1, x1 - x0);
+      if (r.fill > 0) { ctx.fillStyle = rgba(r.color, r.fill * r.alpha); ctx.fillRect(x0, r.y0, w, r.y1 - r.y0); }
+      if (r.stroke > 0) {
+        ctx.strokeStyle = rgba(r.color, r.stroke * r.alpha);
+        ctx.lineWidth = 1.25;
+        ctx.strokeRect(x0 + 0.5, r.y0 + 0.5, Math.max(0, w - 1), r.y1 - r.y0 - 1);
+      }
+    }
+    for (const l of sc.lines) {
+      if (l.alpha <= 0.005) continue;
+      ctx.strokeStyle = rgba(l.color, l.alpha);
+      ctx.lineWidth = l.width;
+      ctx.setLineDash(l.dash ? [5, 4] : []);
+      line(X(l.x), l.y0, X(l.x), l.y1);
+      ctx.setLineDash([]);
+    }
+    for (const t of sc.labels) {
+      if (t.alpha <= 0.02) continue;
+      ctx.font = FONT[t.font];
+      if (t.w0 !== undefined && ctx.measureText(t.text).width + 12 > X(t.w1) - X(t.w0)) continue;
+      text(t.text, X(t.x) + t.dx, t.y, rgba(t.color, t.alpha), t.font, t.align);
+    }
+    ctx.restore();
+
+    text(sc.title, M, G.IV_TOP - 12, COLOR.muted, "title", "left");
+  }
+
+  function resize() {
+    const w = Math.floor(canvas.clientWidth);
+    if (!w) return;
+    W = w;
+    DPR = window.devicePixelRatio || 1;
+    canvas.width = Math.round(W * DPR);
+    canvas.height = Math.round(G.H * DPR);
+    draw(displayed);
+  }
+
+  // ---- State, stepping, DOM -------------------------------------------------------------------
+
+  const state = { mode: "sender", predictor: "alternation", index: 0, playing: false };
+  let frames = [], displayed = null, anim = null, playTimer = null, lastShown = null;
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const DURATION = 650, DWELL = 750;
+
+  const $ = id => document.getElementById(id);
+  const els = {
+    sender: $("mode-sender"), receiver: $("mode-receiver"), predictor: $("predictor"),
+    first: $("first"), prev: $("prev"), play: $("play"), playIcon: $("play-icon"), next: $("next"), last: $("last"),
+    narration: $("narration"), tapes: $("tapes"), tally: $("tally"),
+  };
+
+  function rebuild() {
+    const pred = PREDICTORS[state.predictor];
+    const sender = buildSender(pred, TEN_BITS);
+    frames = state.mode === "sender" ? sender : buildReceiver(pred, sender.at(-1).code, TEN_BITS.length);
+    renderSide();
+  }
+
+  function renderSide() {
+    els.sender.setAttribute("aria-pressed", String(state.mode === "sender"));
+    els.receiver.setAttribute("aria-pressed", String(state.mode === "receiver"));
+  }
+
+  // The two bit streams on one line: the side's input, then its output.
+  const tapeRow = (inLabel, inCells, outLabel, outCells) =>
+    `<div class="tape"><span class="label">${inLabel}</span><div class="tape-cells">${inCells}</div></div>` +
+    `<div class="tape"><span class="flow" aria-hidden="true">→</span><span class="label">${outLabel}</span>` +
+    `<div class="tape-cells">${outCells}</div></div>`;
+
+  function tapesOf(f, forward) {
+    const box = (cls, txt) => `<span class="bitbox ${cls}">${txt}</span>`;
+    const message = [], code = [];
+    for (let i = 0; i < f.n; i++) {
+      const current = i === f.t ? " current" : "";
+      if (f.mode === "sender") {
+        const bit = f.message[i];
+        const coded = i < f.t || f.t >= f.n || (i === f.t && ["keep", "send", "wait"].includes(f.phase));
+        message.push(box(`b${bit}${coded ? "" : " future"}${current}`, bit));
+      } else {
+        const known = i < f.bits.length;
+        message.push(box((known ? `b${f.bits[i]}` : "future") + current, known ? f.bits[i] : "·"));
+      }
+    }
+    if (f.mode === "sender") {
+      [...f.code].forEach((c, i) => {
+        let cls = `b${c}`;
+        if (f.flushFrom !== null && i >= f.flushFrom) cls += " flushed";
+        if (forward && i === f.code.length - 1 && (f.phase === "send" || f.phase === "flush")) cls += " new";
+        code.push(box(cls, c));
+      });
+      return {
+        tapes: tapeRow("Message", message.join(""), "Code sent", code.join("") || '<span class="none">nothing yet</span>'),
+        tally: `Cost so far ${(-Math.log2(f.high - f.low)).toFixed(2)} bits · ${f.code.length} code digit${f.code.length === 1 ? "" : "s"} sent`,
+      };
+    } else {
+      [...f.code].forEach((c, i) => {
+        let cls = `b${c}`;
+        if (i >= f.read.length) cls += " unread";
+        if (forward && i === f.read.length - 1 && f.phase === "read") cls += " new";
+        code.push(box(cls, c));
+      });
+      return {
+        tapes: tapeRow("Code", code.join(""), "Decoded", message.join("")),
+        tally: `${f.read.length} of ${f.code.length} code digits read · ${f.bits.length} of ${f.n} bits decoded`,
+      };
+    }
+  }
+
+  function renderTapes(f, forward) {
+    const { tapes, tally } = tapesOf(f, forward);
+    els.tapes.innerHTML = tapes;
+    els.tally.textContent = tally;
+  }
+
+  // Reserve the tallest bit streams and narration of any step, for both sides and both predictors, so the
+  // widget keeps one height while stepping and the page around it never shifts.
+  function stabilize() {
+    const [tapesBox, narrationBox] = document.querySelector(".measure").children;
+    let tapes = 0, narration = 0;
+    for (const pred of Object.values(PREDICTORS)) {
+      const sender = buildSender(pred, TEN_BITS);
+      for (const f of [...sender, ...buildReceiver(pred, sender.at(-1).code, TEN_BITS.length)]) {
+        tapesBox.innerHTML = tapesOf(f, false).tapes;
+        narrationBox.innerHTML = narrate(f);
+        tapes = Math.max(tapes, tapesBox.offsetHeight);
+        narration = Math.max(narration, narrationBox.offsetHeight);
+      }
+    }
+    els.tapes.style.minHeight = `${tapes}px`;
+    els.narration.style.minHeight = `${narration}px`;
+  }
+
+  function updateDom(forward) {
+    const f = frames[state.index];
+    els.first.disabled = els.prev.disabled = state.index === 0;
+    els.next.disabled = els.last.disabled = state.index === frames.length - 1;
+    els.narration.innerHTML = narrate(f);
+    els.narration.classList.remove("fresh");
+    void els.narration.offsetWidth;
+    els.narration.classList.add("fresh");
+    renderTapes(f, forward);
+    canvas.setAttribute("aria-label", els.narration.textContent);
+  }
+
+  function goTo(i, animate = true) {
+    i = Math.max(0, Math.min(frames.length - 1, i));
+    const forward = lastShown !== null && i === lastShown + 1;
+    state.index = i;
+    lastShown = i;
+    updateDom(forward);
+    const target = sceneOf(frames[i]);
+    if (!animate || reduced || !displayed) {
+      anim = null;
+      displayed = target;
+      draw(displayed);
+      afterStep();
+      return;
+    }
+    anim = { from: displayed, to: target, start: performance.now() };
+    requestAnimationFrame(tick);
+  }
+
+  function tick(now) {
+    if (!anim) return;
+    const t = Math.min(1, (now - anim.start) / DURATION);
+    if (t >= 1) {
+      displayed = anim.to;
+      anim = null;
+      draw(displayed);
+      afterStep();
+      return;
+    }
+    displayed = tweenScenes(anim.from, anim.to, ease(t));
+    draw(displayed);
+    requestAnimationFrame(tick);
+  }
+
+  function afterStep() {
+    clearTimeout(playTimer);
+    if (!state.playing) return;
+    if (state.index >= frames.length - 1) { setPlaying(false); return; }
+    playTimer = setTimeout(() => { if (state.playing) goTo(state.index + 1); }, DWELL);
+  }
+
+  function setPlaying(on) {
+    state.playing = on;
+    els.play.setAttribute("aria-label", on ? "Pause" : "Play");
+    els.playIcon.innerHTML = on
+      ? '<path d="M4.5 3h2.4v10H4.5zM9.1 3h2.4v10H9.1z" fill="currentColor"/>'
+      : '<path d="M4.5 2.8 13.5 8l-9 5.2z" fill="currentColor"/>';
+    if (on) {
+      if (state.index >= frames.length - 1) goTo(0, false);
+      else goTo(state.index + 1);
+    } else {
+      clearTimeout(playTimer);
+    }
+  }
+
+  function restart() {
+    setPlaying(false);
+    rebuild();
+    lastShown = null;
+    goTo(0);
+  }
+
+  els.sender.addEventListener("click", () => { if (state.mode !== "sender") { state.mode = "sender"; restart(); } });
+  els.receiver.addEventListener("click", () => { if (state.mode !== "receiver") { state.mode = "receiver"; restart(); } });
+  els.predictor.addEventListener("change", () => { state.predictor = els.predictor.value; restart(); });
+
+  els.first.addEventListener("click", () => { setPlaying(false); goTo(0); });
+  els.prev.addEventListener("click", () => { setPlaying(false); goTo(state.index - 1); });
+  els.next.addEventListener("click", () => { setPlaying(false); goTo(state.index + 1); });
+  els.last.addEventListener("click", () => { setPlaying(false); goTo(frames.length - 1); });
+  els.play.addEventListener("click", () => setPlaying(!state.playing));
+
+  new ResizeObserver(resize).observe(canvas);
+  const retheme = () => { readColors(); if (displayed) displayed = sceneOf(frames[state.index]); draw(displayed); };
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", retheme);
+  new MutationObserver(retheme).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  rebuild();
+  resize();
+  goTo(0, false);
+  let measuredWidth = 0;
+  new ResizeObserver(([entry]) => {
+    const width = Math.round(entry.contentRect.width);
+    if (width !== measuredWidth) { measuredWidth = width; stabilize(); }
+  }).observe(document.querySelector(".readout"));
+  if (document.fonts?.ready) document.fonts.ready.then(() => { stabilize(); draw(displayed); });
+})();
+</script>
+""";
+
+# ╔═╡ 64458bda-cd26-5379-bc64-ddd8269ab9a1
+let page = replace(SENDER_RECEIVER, "&" => "&amp;", "\"" => "&quot;")
+    HTML("""
+    <iframe srcdoc="$page" title="Sender and receiver"
+            style="display: block; width: 100%; height: 560px; border: 0;"></iframe>
+    <script>
+    const frame = currentScript.previousElementSibling;
+    frame.addEventListener("load", () => {
+        const body = frame.contentDocument.body;
+        const fit = () => { frame.style.height = body.scrollHeight + "px"; };
+        const watcher = new ResizeObserver(fit);
+        watcher.observe(body);
+        invalidation.then(() => watcher.disconnect());
+        fit();
+    });
+    </script>
+    """)
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -2992,10 +3665,9 @@ uuid = "23338594-aafe-5451-b93e-139f81909106"
 # ╠═c10841f5-ec8d-415c-84a6-216611f5074c
 # ╠═afdc66a8-40d9-54c1-9a04-6862b90e2f4d
 # ╟─d0c35b35-3ffa-59cd-bf7d-8c551ab00845
-# ╟─70dcb2b6-b983-5952-82d1-00adc71fbb7d
-# ╟─981c8c99-4fd2-5ba3-b745-c986a106bb46
-# ╟─37b6fd25-1dba-55a2-8d41-aa7a689e52d8
-# ╟─1f86c813-7a0d-577a-8531-4f98ea6d426d
+# ╟─5b670148-3833-5977-afb8-ab9ef98f5512
+# ╟─64458bda-cd26-5379-bc64-ddd8269ab9a1
+# ╟─72d5dcbb-39be-55c3-be44-1fb8aaca1471
 # ╟─ab726d26-082c-4c83-b20c-063d45f438b3
 # ╠═69c7a1fb-4ccf-5622-a0fb-fcedd41c9ab5
 # ╟─28d1adda-8b0c-43c7-a18b-a89d7cc5028d
@@ -3053,23 +3725,13 @@ uuid = "23338594-aafe-5451-b93e-139f81909106"
 # ╟─baf84fac-12da-50b2-923b-61883ba2d5e5
 # ╟─bee35bd4-698d-563c-879f-2cf80429f8e8
 # ╟─71391962-660d-5d7f-86ab-c9319fa462ad
-# ╠═c1101a91-3b22-5788-a3b1-1c817c8f659e
-# ╠═491b798f-57f6-5219-a476-6c233c759cae
-# ╠═3ccd84b9-df22-566a-bbfc-a47705401a44
-# ╠═202c4c72-88aa-584b-bc57-762289b84b83
-# ╠═4cd13998-ab74-5b2d-b10f-8d98e48becc4
-# ╠═68c08ab6-3f9f-5302-86e0-9fb996cb4a5a
-# ╠═8abab510-3437-5815-aaa1-75362cd707fa
-# ╠═3b3a36da-42e1-5233-b2a7-1d75cb8a575c
-# ╠═71857ff0-130b-5a3d-807f-a0ed8c5694d8
-# ╠═4204233e-773b-51a2-a9d3-9394b4d98f97
 # ╠═704d8f96-cd78-5ddf-9a90-30cb68d4dc6a
-# ╠═90501124-d3c4-5649-b5e5-0dbafbfd08e9
 # ╠═08c82a03-9fa4-5b9d-a374-b5563d56bbf1
 # ╠═72ed5461-7de0-5be6-9e20-b2070b71b343
 # ╠═33708e56-08e2-5be5-b599-2d26008dbf7a
 # ╠═e0e939af-fa4b-5f1c-82bf-660dc87bf2d8
 # ╠═da9c47c3-26ea-5e4e-9755-8df333ff3e1e
 # ╠═e715cea6-339d-5d77-8109-d8cfdf9d2ccd
+# ╟─3a483061-3cce-5074-997b-7671e8348e88
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
