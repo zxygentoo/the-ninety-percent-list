@@ -841,7 +841,7 @@ SENDER_RECEIVER = raw"""
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sender and Receiver</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&family=Alegreya+Sans:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=Alegreya+Sans:ital,wght@0,400;0,700;1,400&display=swap">
 <style>
   /* Layout: the side switch and the predictor; the animation at full width (an overview of [0, 1), zoom lines,
      the number line with the interval above the axis and the code's cell below it) and its legend; the transport,
@@ -860,7 +860,6 @@ SENDER_RECEIVER = raw"""
     --one: #c27c00;
     --cell: #138a5f;
     --alert: #e5484d;
-    --font-math: "STIX Two Text", "Cambria Math", Georgia, serif;
     --font-prose: "Alegreya Sans", "Trebuchet MS", sans-serif;
     --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -1206,7 +1205,7 @@ SENDER_RECEIVER = raw"""
   const readColors = () => { COLOR = Object.fromEntries(["fg", "muted", "zero", "one", "cell", "alert"].map(k => [k, token(k)])); };
   readColors();
   const FONT = {
-    band: `italic 15px ${token("font-math")}`,
+    band: `500 13.5px ${token("font-ui")}`,
     small: `500 11.5px ${token("font-ui")}`,
     tick: `11px ${token("font-mono")}`,
     title: `12px ${token("font-mono")}`,
