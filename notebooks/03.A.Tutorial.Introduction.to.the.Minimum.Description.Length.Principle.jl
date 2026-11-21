@@ -162,7 +162,7 @@ end
 
 # ╔═╡ 2bfba18c-093f-48e3-9ac9-f0403b0ea14c
 md"""
-Here is the coder at work on `01000100`, with a predictor that expects a 1 one time in four, `prefix -> 1 // 4`. Step through either side. The sender narrows the interval bit by bit, and picks the codeword at the end. The receiver starts with nothing but the codeword, and at each split keeps whichever side ``c`` falls on. The knob sets the predictor's chance of a 1; leave it at 1/4 for now.
+Here is the coder at work on `01000100`, with a predictor that expects a 1 one time in four, `prefix -> 1 // 4`. Step through either side. The sender narrows the interval bit by bit, and picks the codeword at the end. The receiver gets the codeword instead of the bits, and at each split keeps whichever side ``c`` falls on. The knob sets the predictor's chance of a 1; leave it at 1/4 for now.
 """
 
 # ╔═╡ 78208971-5f13-4f4b-9458-46178e82f425
@@ -531,7 +531,7 @@ end
 let x = "01000100"
     bits_at(θ) = fixed(ideal(x, predict_bernoulli(θ)), 2)
     Markdown.parse("""
-    Fitting a model means turning its knobs until the codeword is shortest. Here the best setting is ``\\theta = 1/4``, the bottom of the curve and the share of 1s in the string, at $(bits_at(1 // 4)) bits. Settings far from it cost far more: $(bits_at(1 // 2)) bits at 1/2, and $(bits_at(9 // 10)) at 9/10.
+    Fitting a model means turning its knobs until the codeword is shortest. Here the best setting is ``\\theta = 1/4``, the bottom of the curve and the share of 1s in the string, at $(bits_at(1 // 4)) bits. Every other setting costs more, and the further off, the more: $(bits_at(1 // 2)) bits at 1/2, and $(bits_at(9 // 10)) at 9/10.
 
     Turning a knob one setting at a time is slow, and for coins there is a shortcut. Flip a coin ``n`` times and get ``k`` ones, and the bias that fits best is always ``k/n``. With that bias, each flip costs ``H(k/n)`` bits on average, where ``H`` is the [binary entropy](https://en.wikipedia.org/wiki/Binary_entropy_function), so the flips cost ``n \\, H(k/n)`` bits in all.
 
@@ -986,7 +986,7 @@ CODER_AT_WORK = raw"""
     const { enc, cw, p1 } = f;
     if (f.side === "sender") {
       if (f.kind === "start") return `The sender starts with the whole interval, [0, 1). The predictor gives every bit a chance of ${show(p1)} to be a 1. For each bit, it splits the interval in those proportions, and the sender keeps the side of the actual bit.`;
-      if (f.kind === "codeword") return `All ${n} bits are in. The final interval is ${num(enc.w).toPrecision(3)} wide: that is the message's probability, ${enc.ideal.toFixed(2)} bits. The codeword is the shortest run of bits that lands inside it, whatever bits follow: ${code(cw.bits)}, ${bitsOf(cw.m)}, which names c = ${decimal(num(cw.c))}.`;
+      if (f.kind === "codeword") return `All ${n} bits are in. The final interval is ${num(enc.w).toPrecision(3)} wide. That width is the message's probability, and −log₂ of it is ${enc.ideal.toFixed(2)} bits. The codeword is the shortest run of bits that lands inside it, whatever bits follow: ${code(cw.bits)}, ${bitsOf(cw.m)}, which names c = ${decimal(num(cw.c))}.`;
       const r = enc.rows[f.shown - 1], side = r.b === "0" ? "left" : "right";
       const cost = `−log₂ ${show(r.pb)} = ${r.cost.toFixed(3)} bits`;
       return `Bit ${r.t + 1} is a ${r.b}. The predictor gave it ${show(r.pb)}, so the sender keeps the ${side} ${show(r.pb)} of the interval. ` +
