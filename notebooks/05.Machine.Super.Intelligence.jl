@@ -841,7 +841,7 @@ SENDER_RECEIVER = raw"""
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sender and Receiver</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&family=Alegreya+Sans:ital,wght@0,400;0,700;1,400&display=swap">
 <style>
   /* Layout: the side switch and the predictor; the animation at full width (an overview of [0, 1), zoom lines,
      the number line with the interval above the axis and the code's cell below it) and its legend; the transport,
@@ -855,24 +855,26 @@ SENDER_RECEIVER = raw"""
     --line: #d9d9d9;
     --control: #f3f3f3;
     --chip: #efefef;
+    --prose: #404040;
     --zero: #2a78d6;
     --one: #c27c00;
     --cell: #138a5f;
     --alert: #e5484d;
     --font-math: "STIX Two Text", "Cambria Math", Georgia, serif;
+    --font-prose: "Alegreya Sans", "Trebuchet MS", sans-serif;
     --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #1f1f1f; --fg: #e4e4e4; --muted: #9b9b9b; --line: #3d3d3d; --control: #2a2a2a; --chip: #2e2e2e;
+      --bg: #1f1f1f; --fg: #e4e4e4; --muted: #9b9b9b; --line: #3d3d3d; --control: #2a2a2a; --chip: #2e2e2e; --prose: #c4c4c4;
       --zero: #58c4dd; --one: #f4c95d; --cell: #83c167; --alert: #fc6255;
       color-scheme: dark;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #1f1f1f; --fg: #e4e4e4; --muted: #9b9b9b; --line: #3d3d3d; --control: #2a2a2a; --chip: #2e2e2e;
+    --bg: #1f1f1f; --fg: #e4e4e4; --muted: #9b9b9b; --line: #3d3d3d; --control: #2a2a2a; --chip: #2e2e2e; --prose: #c4c4c4;
     --zero: #58c4dd; --one: #f4c95d; --cell: #83c167; --alert: #fc6255;
     color-scheme: dark;
   }
@@ -933,11 +935,15 @@ SENDER_RECEIVER = raw"""
   .bitbox.flushed { border-style: dashed; border-color: var(--cell); }
   .bitbox.new { animation: pop .45s ease-out; }
   .none { font-size: 13px; color: var(--muted); }
-  .narration { margin: 0; font-family: var(--font-math); font-size: 19px; line-height: 1.5; }
-  .narration b { font-weight: 600; }
+  /* As the notebook's markdown: Alegreya Sans at 14.5px, which Pluto loads scaled by 119%. */
+  .narration {
+    margin: 0; font-family: var(--font-prose); font-size: 17.25px; line-height: 23.2px; word-spacing: 0.77px;
+    color: var(--prose);
+  }
+  .narration b { font-weight: 700; }
   .narration.fresh { animation: fade .35s ease-out; }
   .iv, .narration code {
-    font-family: var(--font-mono); font-size: .8em; white-space: nowrap;
+    font-family: var(--font-mono); font-size: 13px; white-space: nowrap;
     background: var(--chip); border-radius: 4px; padding: 1px 5px;
   }
   .tally { margin: 0; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
