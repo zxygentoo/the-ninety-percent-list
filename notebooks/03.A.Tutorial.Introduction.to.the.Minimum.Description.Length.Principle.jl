@@ -160,6 +160,11 @@ ideal(x, predict) = let (low, high) = last(intervals(x, predict))
     log2(1 / Float64(high - low))
 end
 
+# ╔═╡ 2bfba18c-093f-48e3-9ac9-f0403b0ea14c
+md"""
+Here is the coder at work on `01000100`, with a predictor that expects a 1 one time in four, `prefix -> 1 // 4`. Step through either side. The sender narrows the interval bit by bit, and picks the codeword at the end. The receiver starts with nothing but the codeword, and at each split keeps whichever side ``c`` falls on. The knob sets the predictor's chance of a 1; leave it at 1/4 for now.
+"""
+
 # ╔═╡ 78208971-5f13-4f4b-9458-46178e82f425
 md"""
 From here on we count the ideal length, ``-\log_2 P(x)``, in fractional bits. The coder always comes within 2 bits of it, for a whole string.
@@ -207,7 +212,7 @@ predict_digits(θ) = prefix -> θ[length(prefix) + 1] == '1' ? 1 // 1 : 0 // 1
 md"""
 ### Fitting is turning the knob
 
-Bernoulli's knob has a name: ``\theta`` is the coin's *bias*, the chance it comes up 1. Turn it, and the same string costs a different number of bits:
+Bernoulli's knob has a name: ``\theta`` is the coin's *bias*, the chance it comes up 1. It is the knob on the coder above. Turn it, and the same string costs a different number of bits; the curve under the knob shows how many, at every setting.
 """
 
 # ╔═╡ ad357c47-1f0f-495f-8ead-fdbbffc0eebf
@@ -430,7 +435,7 @@ end
 md"""
 ## Appendix: helpers
 
-The sources of strings, the models' names, number formatting, and the chart style. The series use the first slots of a colour-blind-safe categorical palette, in fixed order.
+The sources of strings, the models' names, number formatting, the chart style, and, in a hidden cell, the page behind the coder illustration. The series use the first slots of a colour-blind-safe categorical palette, in fixed order.
 """
 
 # ╔═╡ fc41683f-2197-4243-bdbd-0629c4b4d7ac
@@ -484,6 +489,18 @@ end
 "`x` with `d` decimals."
 fixed(x, d = 1) = Printf.format(Printf.Format("%.$(d)f"), x)
 
+# ╔═╡ 81a5dc12-d0d6-52ae-a17f-00318713312e
+let x = "01000100", predict = prefix -> 1 // 4, wrong = prefix -> 9 // 10
+    code = encode(x, predict)
+    Markdown.parse("""
+    The codeword is `$code`, $(length(code)) bits, which names ``c = 0.$(code)_2 = $(Float64(number(code)))``, and `decode` turns it back into `$(decode(code, predict, length(x)))`.
+
+    The two 1s are the surprises. Each keeps a quarter of the interval and costs 2 bits; each 0 keeps three quarters and costs 0.415. Together they cost $(fixed(ideal(x, predict), 2)) bits, the ideal. The codeword is a little longer, because it must be whole bits and must leave room for whatever comes after it. `101` alone also names 0.625, but a number that merely starts 0.101… can run up to 0.75, outside the interval. The trailing zeros pin it down.
+
+    A model needn't be right about every bit. The bits it finds unlikely are still sent; they just cost more. So the code stays lossless, and an imperfect model shows up as a longer codeword, not as lost data. Turn the knob to 9/10, a predictor badly wrong about this string: it still sends it exactly, in $(length(encode(x, wrong))) bits.
+    """)
+end
+
 # ╔═╡ c09c5b7a-0923-4e5e-8350-973245432a84
 let x = "01000100"
     machines = [
@@ -507,6 +524,18 @@ let x = "01000100"
     - **Bernoulli** expects 0s, and pays 2 bits for each 1.
     - **Markov** flips one coin after each 0 and another after each 1. In this string a 1 is never followed by another 1, so ``\\theta_1 = 0``, and every bit after a 1 is free.
     - **Digits** sends nothing at all. Its knob already holds the string, and the receiver needs the knob to decode. The string didn't vanish: it moved into the setting.
+    """)
+end
+
+# ╔═╡ ab41a3d5-2220-49b6-b24f-f92aa1940957
+let x = "01000100"
+    bits_at(θ) = fixed(ideal(x, predict_bernoulli(θ)), 2)
+    Markdown.parse("""
+    Fitting a model means turning its knobs until the codeword is shortest. Here the best setting is ``\\theta = 1/4``, the bottom of the curve and the share of 1s in the string, at $(bits_at(1 // 4)) bits. Settings far from it cost far more: $(bits_at(1 // 2)) bits at 1/2, and $(bits_at(9 // 10)) at 9/10.
+
+    Turning a knob one setting at a time is slow, and for coins there is a shortcut. Flip a coin ``n`` times and get ``k`` ones, and the bias that fits best is always ``k/n``. With that bias, each flip costs ``H(k/n)`` bits on average, where ``H`` is the [binary entropy](https://en.wikipedia.org/wiki/Binary_entropy_function), so the flips cost ``n \\, H(k/n)`` bits in all.
+
+    All four models come down to coin flips, so each best fit is one short function, which takes a string and returns its best fit in bits.
     """)
 end
 
@@ -590,54 +619,6 @@ let periodic = repeat("0001", N ÷ 4)
     The language also decides what can be seen. None of our four models sees the period in `0001` repeated: the best, $(NAMES[four.name]), describes $N bits of it in $(fixed(four.value)). Order $(ORDERS[argmin(rungs)]) of the ladder sees it, since any three bits fix the next, and MDL picks it at $(fixed(minimum(rungs))) bits. MDL finds what its model can express, and nothing more.
 
     A single weight, like Digits' ``\\theta``, can hold any number of bits, which is why Hinton and van Camp, next on the list, measure the *information* in a network's weights rather than counting them. One twist to carry along: Blier and Ollivier found that the variational codes grown from that idea give "surprisingly poor" bounds on deep networks, while prequential codes do well.
-    """)
-end
-
-# ╔═╡ dcd3e964-6927-4c7c-b53a-3681930f0283
-"A fraction, as `numerator/denominator`."
-fraction(p) = "$(numerator(p))/$(denominator(p))"
-
-# ╔═╡ 2bfba18c-093f-48e3-9ac9-f0403b0ea14c
-let x = "01000100", predict = prefix -> 1 // 4
-    code = encode(x, predict)
-    c = number(code)
-    before = [WHOLE; intervals(x, predict)[1:end-1]]
-    rows = map(enumerate(before)) do (t, (low, high))
-        p_one = predict(x[1:t-1])
-        p_bit = x[t] == '1' ? p_one : 1 - p_one
-        _, one_side = sides((low, high), p_one)
-        "| $t | `$(x[t])` | $(fraction(p_bit)) | [$(fixed(Float64(low), 4)), $(fixed(Float64(high), 4))) | $(fixed(Float64((c - low) / (high - low)), 3)) | `$(c < first(one_side) ? 0 : 1)` | $(fixed(-log2(p_bit), 3)) |"
-    end
-    wrong = prefix -> 9 // 10
-    Markdown.parse("""
-    Encode `$x` with a predictor that expects a 1 one time in four, `prefix -> 1 // 4`. The codeword is `$code`, $(length(code)) bits, which names ``c = 0.$(code)_2 = $(Float64(c))``. Now decode it:
-
-    | bit | value | its probability | interval before | where ``c`` falls | decoded | cost (bits) |
-    |:-:|:-:|:-:|:--|:-:|:-:|--:|
-    $(join(rows, "\n"))
-
-    "Where ``c`` falls" is its place in the interval, from 0 at the left end to 1 at the right. The 0 side covers the first ¾, so the decoder's rule is one comparison: below ¾, the bit is 0; otherwise, 1. The decoded column comes from ``c`` alone, and it matches the string.
-
-    The two 1s are the surprises. Each keeps a quarter of the interval and costs 2 bits; each 0 keeps three quarters and costs 0.415. Together they cost $(fixed(ideal(x, predict), 2)) bits, the ideal. The codeword is a little longer, because it must be whole bits and must leave room for whatever comes after it. `101` alone also names 0.625, but a number that merely starts 0.101… can run up to 0.75, outside the interval. The trailing zeros pin it down.
-
-    A model needn't be right about every bit. The bits it finds unlikely are still sent; they just cost more. So the code stays lossless, and an imperfect model shows up as a longer codeword, not as lost data. A predictor that is badly wrong about this string, expecting a 1 nine times in ten, still sends it exactly, in $(length(encode(x, wrong))) bits.
-    """)
-end
-
-# ╔═╡ ab41a3d5-2220-49b6-b24f-f92aa1940957
-let x = "01000100", settings = [1 // 10, 1 // 5, 1 // 4, 1 // 3, 1 // 2, 3 // 4, 9 // 10]
-    row(f) = join((f(θ) for θ in settings), " | ")
-    Markdown.parse("""
-    | ``\\theta`` | $(row(fraction)) |
-    |:--|$(repeat("--:|", length(settings)))
-    | ideal (bits) | $(row(θ -> fixed(ideal(x, predict_bernoulli(θ)), 2))) |
-    | codeword (bits) | $(row(θ -> length(encode(x, predict_bernoulli(θ))))) |
-
-    Fitting a model means turning its knobs until the codeword is shortest. Here the best setting is ``\\theta = 1/4``, the share of 1s in the string, and settings far from it cost far more.
-
-    Turning a knob one setting at a time is slow, and for coins there is a shortcut. Flip a coin ``n`` times and get ``k`` ones, and the bias that fits best is always ``k/n``. With that bias, each flip costs ``H(k/n)`` bits on average, where ``H`` is the [binary entropy](https://en.wikipedia.org/wiki/Binary_entropy_function), so the flips cost ``n \\, H(k/n)`` bits in all.
-
-    All four models come down to coin flips, so each best fit is one short function, which takes a string and returns its best fit in bits.
     """)
 end
 
@@ -765,6 +746,498 @@ let (; fits, scores) = ladder
         Legend(fig[2, 1], ax; orientation = :horizontal)
         fig
     end
+end
+
+# ╔═╡ db7dcc76-6101-57f3-8a58-efadc7be6e7a
+CODER_AT_WORK = raw"""
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Coder at Work</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=Alegreya+Sans:ital,wght@0,400;0,700;1,400&display=swap">
+<style>
+  /* Layout: the side switch and the predictor's knob; the cascade at full width (where the interval sits in
+     [0, 1), then one bar per bit, each the interval before that bit stretched to full width and split by the
+     predictor, then the final interval with the codeword's cell); the transport, where the narration's length
+     can't move it; then the bit streams, the running cost, and what just happened, in the notebook's prose.
+     No boxes: it sits on the page like a figure. Light and dark follow the viewer, on Pluto's own backgrounds. */
+  :root {
+    --bg: #ffffff;
+    --fg: #1f1f1f;
+    --muted: #6b6b6b;
+    --line: #d9d9d9;
+    --control: #f3f3f3;
+    --chip: #efefef;
+    --prose: #404040;
+    --zero: #2a78d6;
+    --one: #eb6834;
+    --cell: #1baf7a;
+    --font-prose: "Alegreya Sans", "Trebuchet MS", sans-serif;
+    --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1f1f1f; --fg: #e4e4e4; --muted: #9b9b9b; --line: #3d3d3d; --control: #2a2a2a; --chip: #2e2e2e; --prose: #c4c4c4;
+      --zero: #58c4dd; --one: #f4c95d; --cell: #83c167;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1f1f1f; --fg: #e4e4e4; --muted: #9b9b9b; --line: #3d3d3d; --control: #2a2a2a; --chip: #2e2e2e; --prose: #c4c4c4;
+    --zero: #58c4dd; --one: #f4c95d; --cell: #83c167;
+    color-scheme: dark;
+  }
+  html { background: var(--bg); }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.55;
+    margin: 0;
+    padding-inline: 0;
+    padding-block: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin-inline: auto; padding-block: 12px 16px; display: grid; gap: 14px; }
+  .bitbox, .narration code { font-variant-ligatures: none; }
+
+  .label { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 28px; }
+  .seg { display: inline-flex; gap: 3px; padding: 3px; border: 1px solid var(--line); border-radius: 9px; background: var(--control); }
+  .seg button {
+    font: inherit; font-size: 14px; font-weight: 500; color: var(--muted);
+    background: transparent; border: 0; border-radius: 6px; padding: 6px 14px; cursor: pointer;
+  }
+  .seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+  /* The knob, and under its track the cost at every setting, so the dot sits under the thumb. */
+  .knob { display: grid; grid-template-columns: auto 220px auto; align-items: center; gap: 2px 12px; }
+  .knob input { width: 220px; margin: 0; accent-color: var(--fg); }
+  .knob output { font-size: 16px; font-weight: 600; min-width: 4.5em; font-variant-numeric: tabular-nums; }
+  #bits-out { font-size: 14px; font-weight: 500; color: var(--muted); }
+  .curve { display: block; overflow: visible; }
+
+  #stage { display: block; width: 100%; overflow: visible; }
+  #stage text { font-family: var(--font-ui); font-variant-numeric: tabular-nums; }
+  .row-in { animation: fade .35s ease-out; }
+
+  .transport { display: flex; justify-content: center; gap: 8px; }
+  .icon-btn {
+    width: 40px; height: 40px; display: inline-grid; place-items: center; padding: 0; cursor: pointer;
+    border-radius: 9px; border: 1px solid var(--line); background: var(--control); color: var(--fg);
+  }
+  .icon-btn svg { width: 16px; height: 16px; }
+  .icon-btn.primary { width: 48px; background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  .icon-btn:disabled { opacity: .35; cursor: default; }
+
+  .readout { display: grid; gap: 10px; position: relative; }
+  .measure { position: absolute; inset: 0 0 auto 0; visibility: hidden; pointer-events: none; }
+  .tapes { display: grid; gap: 8px; align-content: start; }
+  .tape { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .tape .label { font-size: 13px; width: 92px; flex: none; }
+  .tape-cells { display: flex; flex-wrap: wrap; gap: 4px; min-height: 32px; align-items: center; min-width: 0; }
+  .bitbox {
+    box-sizing: border-box; width: 28px; height: 32px; display: grid; place-items: center; border-radius: 6px;
+    border: 1px solid var(--line); font-family: var(--font-mono); font-size: 16px; font-weight: 600;
+  }
+  .bitbox.b0 { color: var(--zero); }
+  .bitbox.b1 { color: var(--one); }
+  .codeword {
+    display: inline-block; padding: 3px 9px; border: 1px solid var(--line); border-radius: 6px;
+    font-family: var(--font-mono); font-size: 16px; font-weight: 600; letter-spacing: .12em; color: var(--cell);
+    font-variant-ligatures: none;
+  }
+  .codeword.new { animation: pop .45s ease-out; }
+  .bitbox.future { color: var(--muted); opacity: .45; }
+  .bitbox.current { border-color: var(--fg); box-shadow: inset 0 0 0 1px var(--fg); }
+  .bitbox.new { animation: pop .45s ease-out; }
+  .none { font-size: 13px; color: var(--muted); }
+  .tally { margin: 0; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  /* As the notebook's markdown: Alegreya Sans at 14.5px, which Pluto loads scaled by 119%. */
+  .narration {
+    margin: 0; font-family: var(--font-prose); font-size: 17.25px; line-height: 23.2px; word-spacing: 0.77px;
+    color: var(--prose);
+  }
+  .narration.fresh { animation: fade .35s ease-out; }
+  .narration code {
+    font-family: var(--font-mono); font-size: 13px; white-space: nowrap;
+    background: var(--chip); border-radius: 4px; padding: 1px 5px;
+  }
+
+  @keyframes pop { from { transform: translateY(-7px) scale(1.25); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes fade { from { opacity: .25; } to { opacity: 1; } }
+  :focus-visible { outline: 2px solid var(--zero); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<main class="wrap">
+  <section class="controls" aria-label="Setup">
+    <div class="seg" role="group" aria-label="Side">
+      <button type="button" id="side-sender" aria-pressed="true">Sender</button>
+      <button type="button" id="side-receiver" aria-pressed="false">Receiver</button>
+    </div>
+    <div class="knob">
+      <label class="label" for="theta">Chance of a 1</label>
+      <input type="range" id="theta" min="1" max="19" step="1" value="5">
+      <output id="theta-out" for="theta"></output>
+      <span class="label">Cost</span>
+      <svg id="curve" class="curve" width="220" height="40" role="img" aria-label="What the message costs at every setting of the knob"></svg>
+      <output id="bits-out"></output>
+    </div>
+  </section>
+
+  <svg id="stage" role="img" aria-label="The interval, split bit by bit"></svg>
+
+  <nav class="transport" aria-label="Steps">
+    <button type="button" class="icon-btn" id="first" aria-label="First step">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3v10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M13 3.2 6 8l7 4.8z" fill="currentColor"/></svg>
+    </button>
+    <button type="button" class="icon-btn" id="prev" aria-label="Previous step">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.5 3.2 4.5 8l7 4.8z" fill="currentColor"/></svg>
+    </button>
+    <button type="button" class="icon-btn primary" id="play" aria-label="Play">
+      <svg viewBox="0 0 16 16" aria-hidden="true" id="play-icon"><path d="M4.5 2.8 13.5 8l-9 5.2z" fill="currentColor"/></svg>
+    </button>
+    <button type="button" class="icon-btn" id="next" aria-label="Next step">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 3.2 11.5 8l-7 4.8z" fill="currentColor"/></svg>
+    </button>
+    <button type="button" class="icon-btn" id="last" aria-label="Last step">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12.5 3v10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M3 3.2 10 8l-7 4.8z" fill="currentColor"/></svg>
+    </button>
+  </nav>
+
+  <section class="readout" aria-label="What just happened">
+    <div class="tapes" id="tapes"></div>
+    <p class="tally" id="tally"></p>
+    <p class="narration" id="narration" aria-live="polite"></p>
+    <div class="measure" aria-hidden="true"><div class="tapes"></div><p class="narration"></p></div>
+  </section>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---- Exact fractions, as the notebook's coder uses ------------------------------------------
+
+  const gcd = (a, b) => { while (b) [a, b] = [b, a % b]; return a < 0n ? -a : a; };
+  const F = (n, d = 1n) => { const g = gcd(n, d) || 1n; return { n: n / g, d: d / g }; };
+  const add = (a, b) => F(a.n * b.d + b.n * a.d, a.d * b.d);
+  const sub = (a, b) => F(a.n * b.d - b.n * a.d, a.d * b.d);
+  const mul = (a, b) => F(a.n * b.n, a.d * b.d);
+  const div = (a, b) => F(a.n * b.d, a.d * b.n);
+  const lt = (a, b) => a.n * b.d < b.n * a.d;
+  const num = a => Number(a.n) / Number(a.d);
+  const ZERO = F(0n), ONE = F(1n);
+  const show = a => `${a.n}/${a.d}`;
+
+  // ---- The coder: pure functions -------------------------------------------------------------
+
+  const MESSAGE = "01000100";
+  const STOPS = 20;   // the knob moves in steps of 1/20
+
+  // Every bit's split: the interval before it, its two sides, and what the bit costs.
+  function encode(p1) {
+    const p0 = sub(ONE, p1), rows = [];
+    let low = ZERO, w = ONE;
+    [...MESSAGE].forEach((b, t) => {
+      const split = add(low, mul(w, p0)), pb = b === "1" ? p1 : p0;
+      rows.push({ t, b, low, w, p0, p1, split, pb, cost: -Math.log2(num(pb)) });
+      if (b === "0") w = mul(w, p0);
+      else { low = split; w = mul(w, p1); }
+    });
+    return { rows, low, w, ideal: rows.reduce((s, r) => s + r.cost, 0) };
+  }
+
+  // The shortest codeword whose every continuation lands in the interval: m bits that name j / 2^m.
+  function codeword(low, w) {
+    const high = add(low, w);
+    for (let m = 0; ; m++) {
+      const scale = 1n << BigInt(m);
+      const j = (low.n * scale + low.d - 1n) / low.d;
+      if ((j + 1n) * high.d <= high.n * scale) {
+        return { m, bits: m ? j.toString(2).padStart(m, "0") : "", c: F(j, scale), end: F(j + 1n, scale) };
+      }
+    }
+  }
+
+  // The frames of one side: the start, one per bit, and for the sender, picking the codeword.
+  function framesOf(side, k) {
+    const p1 = F(BigInt(k), BigInt(STOPS)), enc = encode(p1), cw = codeword(enc.low, enc.w);
+    const base = { side, p1, enc, cw };
+    const bits = enc.rows.map(r => ({ ...base, kind: "bit", shown: r.t + 1 }));
+    const frames = [{ ...base, kind: "start", shown: 0 }, ...bits];
+    return side === "sender" ? [...frames, { ...base, kind: "codeword", shown: MESSAGE.length }] : frames;
+  }
+
+  // ---- What just happened, in words ----------------------------------------------------------
+
+  const code = s => `<code>${s}</code>`;
+  const bitsOf = n => `${n} bit${n === 1 ? "" : "s"}`;
+  const decimal = x => String(+x.toFixed(6));
+  const n = MESSAGE.length;
+
+  function narrate(f) {
+    const { enc, cw, p1 } = f;
+    if (f.side === "sender") {
+      if (f.kind === "start") return `The sender starts with the whole interval, [0, 1). The predictor gives every bit a chance of ${show(p1)} to be a 1. For each bit, it splits the interval in those proportions, and the sender keeps the side of the actual bit.`;
+      if (f.kind === "codeword") return `All ${n} bits are in. The final interval is ${num(enc.w).toPrecision(3)} wide: that is the message's probability, ${enc.ideal.toFixed(2)} bits. The codeword is the shortest run of bits that lands inside it, whatever bits follow: ${code(cw.bits)}, ${bitsOf(cw.m)}, which names c = ${decimal(num(cw.c))}.`;
+      const r = enc.rows[f.shown - 1], side = r.b === "0" ? "left" : "right";
+      const cost = `−log₂ ${show(r.pb)} = ${r.cost.toFixed(3)} bits`;
+      return `Bit ${r.t + 1} is a ${r.b}. The predictor gave it ${show(r.pb)}, so the sender keeps the ${side} ${show(r.pb)} of the interval. ` +
+             (num(r.pb) < 0.5 ? `A surprise keeps a sliver, and costs ${cost}.` : `It costs ${cost}.`);
+    }
+    if (f.kind === "start") return `The receiver gets only the codeword ${code(cw.bits)}, which names c = ${decimal(num(cw.c))}. It knows the predictor and the length, ${n} bits, and starts from [0, 1) too.`;
+    const r = enc.rows[f.shown - 1], where = num(div(sub(cw.c, r.low), r.w));
+    const inside = lt(cw.c, r.split);
+    return `The predictor splits the interval: ${show(r.p0)} for a 0 on the left, ${show(r.p1)} for a 1 on the right. c sits ${where.toFixed(3)} of the way across, ` +
+           `${inside ? "inside the 0 side" : "past the 0 side"}, so bit ${r.t + 1} is a ${r.b}.` +
+           (f.shown === n ? ` All ${n} bits are back, from the codeword alone.` : "");
+  }
+
+  // ---- The cascade ---------------------------------------------------------------------------
+
+  const els = {};
+  for (const id of ["stage", "curve", "bits-out", "theta", "theta-out", "tapes", "tally", "narration", "first", "prev", "play", "play-icon", "next", "last", "side-sender", "side-receiver"]) {
+    els[id.replace(/-(.)/g, (_, c) => c.toUpperCase())] = document.getElementById(id);
+  }
+
+  const BAR = 20, GAP = 12, TOP = 58;
+  const stageHeight = () => TOP + n * (BAR + GAP) + 6 + BAR + 28;
+
+  function cascade(f, fresh) {
+    const W = els.stage.clientWidth || 640, narrow = W < 520;
+    const L = 30, R = narrow ? 44 : 70, barW = W - L - R, x = v => L + barW * v;
+    const { enc, cw } = f, done = f.shown, showC = f.side === "receiver" || f.kind === "codeword";
+    const out = [];
+
+    // Where the interval sits inside [0, 1): it narrows to the message's probability.
+    const cur = done < n ? enc.rows[done] : { low: enc.low, w: enc.w };
+    out.push(`<text x="${L}" y="12" font-size="13" fill="var(--muted)">the interval inside [0, 1), ${num(cur.w).toPrecision(3)} wide</text>`);
+    out.push(`<line x1="${x(0)}" x2="${x(1)}" y1="30" y2="30" stroke="var(--line)" stroke-width="2"/>`);
+    for (const [v, label] of [[0, "0"], [0.5, "½"], [1, "1"]]) {
+      out.push(`<line x1="${x(v)}" x2="${x(v)}" y1="25" y2="35" stroke="var(--muted)"/><text x="${x(v)}" y="49" font-size="13" text-anchor="middle" fill="var(--muted)">${label}</text>`);
+    }
+    out.push(`<rect x="${x(num(cur.low))}" y="24" width="${Math.max(barW * num(cur.w), 2)}" height="12" rx="2" fill="var(--fg)"/>`);
+    if (showC) out.push(`<line x1="${x(num(cw.c))}" x2="${x(num(cw.c))}" y1="20" y2="40" stroke="var(--cell)" stroke-width="2"/>`);
+
+    // One bar per bit: the interval before it, stretched to full width, split 0 | 1.
+    for (const r of enc.rows) {
+      const y = TOP + r.t * (BAR + GAP), shown = r.t < done, p0 = num(r.p0), keepZero = r.b === "0";
+      const g = [`<g${shown && r.t === done - 1 && fresh ? ' class="row-in"' : ""}>`];
+      if (!shown) {
+        g.push(`<rect x="${x(0)}" y="${y}" width="${barW}" height="${BAR}" rx="3" fill="none" stroke="var(--line)" stroke-dasharray="3 3"/>`);
+      } else {
+        for (const [b, a, z, p] of [["0", 0, p0, r.p0], ["1", p0, 1, r.p1]]) {
+          const kept = (b === "0") === keepZero;
+          g.push(`<rect x="${x(a) + (b === "1" ? 1 : 0)}" y="${y}" width="${Math.max(barW * (z - a) - 1, 0.5)}" height="${BAR}" rx="3" fill="var(--${b === "0" ? "zero" : "one"})" fill-opacity="${kept ? 0.85 : 0.16}"/>`);
+          if (barW * (z - a) > 56) {
+            g.push(`<text x="${(x(a) + x(z)) / 2}" y="${y + 15}" font-size="13" font-weight="500" text-anchor="middle" fill="${kept ? "var(--bg)" : "var(--muted)"}">${b} · ${show(p)}</text>`);
+          }
+        }
+        g.push(`<text x="${L - 10}" y="${y + 15}" font-size="16" font-weight="600" text-anchor="end" fill="var(--${keepZero ? "zero" : "one"})">${r.b}</text>`);
+        g.push(`<text x="${L + barW + 10}" y="${y + 15}" font-size="13" fill="var(--muted)">${r.cost.toFixed(2)}${narrow ? "" : " bits"}</text>`);
+        if (r.t < n - 1) {
+          const [k0, k1] = keepZero ? [0, p0] : [p0, 1];
+          g.push(`<polygon points="${x(k0)},${y + BAR} ${x(k1)},${y + BAR} ${x(1)},${y + BAR + GAP} ${x(0)},${y + BAR + GAP}" fill="var(--${keepZero ? "zero" : "one"})" fill-opacity="0.1"/>`);
+        }
+      }
+      if (showC) {
+        const pos = num(div(sub(cw.c, r.low), r.w));
+        g.push(`<line x1="${x(pos)}" x2="${x(pos)}" y1="${y - 3}" y2="${y + BAR + 3}" stroke="var(--cell)" stroke-width="2" opacity="${shown ? 1 : 0.35}"/>`);
+      }
+      g.push("</g>");
+      out.push(g.join(""));
+    }
+
+    // The final interval, stretched, with the codeword's cell: every number that starts with the codeword.
+    const yF = TOP + n * (BAR + GAP) + 6;
+    if (done === n) {
+      out.push(`<rect x="${x(0)}" y="${yF}" width="${barW}" height="${BAR}" rx="3" fill="var(--fg)" fill-opacity="0.08" stroke="var(--line)"/>`);
+      out.push(`<text x="${L + barW + 10}" y="${yF + 15}" font-size="13" fill="var(--muted)">final</text>`);
+      if (showC) {
+        const a = num(div(sub(cw.c, enc.low), enc.w)), z = num(div(sub(cw.end, enc.low), enc.w));
+        out.push(`<rect x="${x(a)}" y="${yF}" width="${Math.max(barW * (z - a), 2)}" height="${BAR}" rx="3" fill="var(--cell)" fill-opacity="0.85"/>`);
+        out.push(`<text x="${x(a)}" y="${yF + BAR + 19}" font-size="13" fill="var(--cell)">every number that starts 0.${cw.bits}… lands here</text>`);
+      }
+    }
+    els.stage.setAttribute("viewBox", `0 0 ${W} ${stageHeight()}`);
+    els.stage.setAttribute("height", stageHeight());
+    els.stage.innerHTML = out.join("");
+  }
+
+  // ---- The knob's curve: what the message costs at every setting -----------------------------
+
+  const ONES = [...MESSAGE].filter(b => b === "1").length, ZEROS = n - ONES;
+  const costAt = p => -(ONES * Math.log2(p) + ZEROS * Math.log2(1 - p));
+  const BEST = ONES / n;
+
+  // Drawn across the knob's track: the first and last settings sit under the thumb's ends, half a thumb in.
+  function curve(k) {
+    const CW = 220, THUMB = 8, yTop = 4, yAxis = 36, yMax = 28;
+    const lo = 1 / STOPS, hi = 1 - 1 / STOPS;
+    const X = p => THUMB + (CW - 2 * THUMB) * (p - lo) / (hi - lo), Y = bits => yAxis - (yAxis - yTop) * bits / yMax;
+    const points = [];
+    for (let i = 0; i <= 90; i++) {
+      const p = lo + (hi - lo) * i / 90;
+      points.push(`${X(p).toFixed(1)},${Y(costAt(p)).toFixed(1)}`);
+    }
+    const p = k / STOPS;
+    els.curve.innerHTML = [
+      `<line x1="0" x2="${CW}" y1="${yAxis}" y2="${yAxis}" stroke="var(--line)"/>`,
+      `<polyline points="${points.join(" ")}" fill="none" stroke="var(--muted)" stroke-width="1.5"/>`,
+      `<circle cx="${X(BEST)}" cy="${Y(costAt(BEST))}" r="3.5" fill="var(--bg)" stroke="var(--muted)" stroke-width="1.25"/>`,
+      `<circle cx="${X(p)}" cy="${Y(costAt(p))}" r="4" fill="var(--fg)"/>`,
+    ].join("");
+    els.bitsOut.textContent = `${costAt(p).toFixed(2)} bits`;
+  }
+
+  // ---- The bit streams ----------------------------------------------------------------------
+
+  const tapeRow = (inLabel, inCells, outLabel, outCells) =>
+    `<div class="tape"><span class="label">${inLabel}</span><div class="tape-cells">${inCells}</div></div>` +
+    `<div class="tape"><span class="label">${outLabel}</span><div class="tape-cells">${outCells}</div></div>`;
+  const box = (cls, txt) => `<span class="bitbox ${cls}">${txt}</span>`;
+
+  function tapesOf(f, forward) {
+    const { enc, cw } = f;
+    if (f.side === "sender") {
+      const message = [...MESSAGE].map((b, i) => box(`b${b}${i < f.shown ? "" : " future"}${f.kind === "bit" && i === f.shown - 1 ? " current" : ""}`, b)).join("");
+      const sent = f.kind === "codeword"
+        ? `<span class="codeword${forward ? " new" : ""}">${cw.bits}</span>`
+        : '<span class="none">picked at the end</span>';
+      const cost = enc.rows.slice(0, f.shown).reduce((s, r) => s + r.cost, 0);
+      return {
+        tapes: tapeRow("Message", message, "Codeword", sent),
+        tally: f.kind === "codeword"
+          ? `Ideal ${enc.ideal.toFixed(2)} bits · codeword ${bitsOf(cw.m)}`
+          : `Cost so far ${cost.toFixed(2)} bits`,
+      };
+    }
+    const received = `<span class="codeword">${cw.bits}</span>`;
+    const decoded = [...MESSAGE].map((b, i) => i < f.shown
+      ? box(`b${b}${i === f.shown - 1 ? " current" : ""}${forward && i === f.shown - 1 ? " new" : ""}`, b)
+      : box("future", "·")).join("");
+    return {
+      tapes: tapeRow("Codeword", received, "Decoded", decoded),
+      tally: `c = ${decimal(num(cw.c))} · ${f.shown} of ${n} bits decoded`,
+    };
+  }
+
+  // ---- Stepping -----------------------------------------------------------------------------
+
+  const DWELL = 1500;
+  const state = { side: "sender", k: 5, index: 0, playing: false };
+  let frames = framesOf(state.side, state.k), lastShown = null, playTimer = null;
+
+  // Reserve the tallest bit streams and narration of any step, on both sides and at every setting of the knob,
+  // so the widget keeps one height and the page around it never shifts.
+  function stabilize() {
+    const [tapesBox, narrationBox] = document.querySelector(".measure").children;
+    let tapes = 0, narration = 0;
+    for (const side of ["sender", "receiver"]) {
+      for (let k = 1; k < STOPS; k++) {
+        for (const f of framesOf(side, k)) {
+          tapesBox.innerHTML = tapesOf(f, false).tapes;
+          narrationBox.innerHTML = narrate(f);
+          tapes = Math.max(tapes, tapesBox.offsetHeight);
+          narration = Math.max(narration, narrationBox.offsetHeight);
+        }
+      }
+    }
+    els.tapes.style.minHeight = `${tapes}px`;
+    els.narration.style.minHeight = `${narration}px`;
+  }
+
+  function render(forward) {
+    const f = frames[state.index];
+    els.sideSender.setAttribute("aria-pressed", String(state.side === "sender"));
+    els.sideReceiver.setAttribute("aria-pressed", String(state.side === "receiver"));
+    els.thetaOut.textContent = show(f.p1);
+    curve(state.k);
+    els.first.disabled = els.prev.disabled = state.index === 0;
+    els.next.disabled = els.last.disabled = state.index === frames.length - 1;
+    cascade(f, forward);
+    const { tapes, tally } = tapesOf(f, forward);
+    els.tapes.innerHTML = tapes;
+    els.tally.textContent = tally;
+    els.narration.innerHTML = narrate(f);
+    els.narration.classList.remove("fresh");
+    void els.narration.offsetWidth;
+    if (forward) els.narration.classList.add("fresh");
+    els.stage.setAttribute("aria-label", els.narration.textContent);
+  }
+
+  function go(i) {
+    i = Math.max(0, Math.min(frames.length - 1, i));
+    const forward = lastShown !== null && i === lastShown + 1;
+    state.index = lastShown = i;
+    render(forward);
+    clearTimeout(playTimer);
+    if (!state.playing) return;
+    if (i >= frames.length - 1) { setPlaying(false); return; }
+    playTimer = setTimeout(() => { if (state.playing) go(state.index + 1); }, DWELL);
+  }
+
+  function setPlaying(on) {
+    state.playing = on;
+    els.play.setAttribute("aria-label", on ? "Pause" : "Play");
+    els.playIcon.innerHTML = on
+      ? '<path d="M4.5 3h2.4v10H4.5zM9.1 3h2.4v10H9.1z" fill="currentColor"/>'
+      : '<path d="M4.5 2.8 13.5 8l-9 5.2z" fill="currentColor"/>';
+    if (on) go(state.index >= frames.length - 1 ? 0 : state.index + 1);
+    else clearTimeout(playTimer);
+  }
+
+  function rebuild(index) {
+    frames = framesOf(state.side, state.k);
+    lastShown = null;
+    go(index);
+  }
+
+  els.sideSender.addEventListener("click", () => { if (state.side !== "sender") { setPlaying(false); state.side = "sender"; rebuild(0); } });
+  els.sideReceiver.addEventListener("click", () => { if (state.side !== "receiver") { setPlaying(false); state.side = "receiver"; rebuild(0); } });
+  // Turning the knob keeps the step, so the costs change in place.
+  els.theta.addEventListener("input", () => { state.k = +els.theta.value; rebuild(state.index); });
+  els.first.addEventListener("click", () => { setPlaying(false); go(0); });
+  els.prev.addEventListener("click", () => { setPlaying(false); go(state.index - 1); });
+  els.next.addEventListener("click", () => { setPlaying(false); go(state.index + 1); });
+  els.last.addEventListener("click", () => { setPlaying(false); go(frames.length - 1); });
+  els.play.addEventListener("click", () => setPlaying(!state.playing));
+
+  go(0);
+  let measuredWidth = 0;
+  new ResizeObserver(([entry]) => {
+    const width = Math.round(entry.contentRect.width);
+    if (width !== measuredWidth) { measuredWidth = width; stabilize(); render(false); }
+  }).observe(document.querySelector(".wrap"));
+  if (document.fonts?.ready) document.fonts.ready.then(() => { stabilize(); render(false); });
+})();
+</script>
+""";
+
+# ╔═╡ fa50daa0-d889-5c29-9b5f-21dc849476d6
+let page = replace(CODER_AT_WORK, "&" => "&amp;", "\"" => "&quot;")
+    HTML("""
+    <iframe srcdoc="$page" title="The coder at work"
+            style="display: block; width: 100%; height: 729px; border: 0;"></iframe>
+    <script>
+    const frame = currentScript.previousElementSibling;
+    frame.addEventListener("load", () => {
+        const body = frame.contentDocument.body;
+        const fit = () => { frame.style.height = body.scrollHeight + "px"; };
+        const watcher = new ResizeObserver(fit);
+        watcher.observe(body);
+        invalidation.then(() => watcher.disconnect());
+        fit();
+    });
+    </script>
+    """)
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -2752,6 +3225,8 @@ uuid = "23338594-aafe-5451-b93e-139f81909106"
 # ╠═14ef12f7-4060-4068-81ba-0ca8e890759c
 # ╠═b6f86f8c-0017-4d96-b9bf-88dbcc9bf8ba
 # ╟─2bfba18c-093f-48e3-9ac9-f0403b0ea14c
+# ╟─fa50daa0-d889-5c29-9b5f-21dc849476d6
+# ╟─81a5dc12-d0d6-52ae-a17f-00318713312e
 # ╟─78208971-5f13-4f4b-9458-46178e82f425
 # ╟─f1302616-023a-4596-b1b5-bab3769302b0
 # ╠═891d29ca-9e98-4ec5-bc78-e8f02d3250a4
@@ -2812,10 +3287,10 @@ uuid = "23338594-aafe-5451-b93e-139f81909106"
 # ╟─c6c8f9e9-5c2a-437b-8ef7-18f55f08aaf6
 # ╟─dca70f21-6f81-4a4e-8957-0bd15d0b0f7a
 # ╟─cc8e4a7c-28a2-4469-8532-0e7bbe0c677a
-# ╟─dcd3e964-6927-4c7c-b53a-3681930f0283
 # ╟─4f92e3af-e842-49c2-aa36-e08e7b6a93f2
 # ╟─fa7af5a4-f282-4796-98a6-8733bdcd70c7
 # ╟─71eced53-6238-4d35-bbc9-04950b90aaee
 # ╟─82c6e1ff-4967-41cc-b722-f5289fa024ad
+# ╟─db7dcc76-6101-57f3-8a58-efadc7be6e7a
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
